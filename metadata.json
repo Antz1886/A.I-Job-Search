@@ -1,0 +1,5 @@
+{
+  "name": "AI Job Search Agent",
+  "description": "Automatically find, evaluate, and rank job opportunities for Ansline Martiens based on her CV and career goals.",
+  "requestFramePermissions": []
+}
