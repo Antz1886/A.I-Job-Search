@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { DailyReport, CandidateProfile, JobMatch, ATSAnalysis, SalaryBenchmark } from "../types";
+import { DailyReport, CandidateProfile, JobMatch, ATSAnalysis, SalaryBenchmark, JobSpecificATS } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
 
@@ -101,6 +101,24 @@ const ATS_SCHEMA = {
   required: [
     "overallAtsScore", "keywordMatchRate", "formattingScore", "impactScore",
     "matchedKeywords", "missingKeywords", "formattingSuggestions", "executivePitch"
+  ]
+};
+
+const JOB_SPECIFIC_ATS_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    jobTitle: { type: Type.STRING },
+    company: { type: Type.STRING },
+    matchScore: { type: Type.INTEGER },
+    probabilityOfSuccess: { type: Type.STRING, enum: ["HIGH", "MEDIUM", "LOW"] },
+    matchedKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+    missingKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
+    gapAnalysis: { type: Type.ARRAY, items: { type: Type.STRING } },
+    coverLetter: { type: Type.STRING }
+  },
+  required: [
+    "jobTitle", "company", "matchScore", "probabilityOfSuccess",
+    "matchedKeywords", "missingKeywords", "gapAnalysis", "coverLetter"
   ]
 };
 
@@ -284,6 +302,51 @@ export async function generateATSAnalysis(profile: CandidateProfile): Promise<AT
   }
 
   return JSON.parse(response.text) as ATSAnalysis;
+}
+
+export async function generateJobSpecificATS(profile: CandidateProfile, jobDescription: string): Promise<JobSpecificATS> {
+  const prompt = `
+    You are a Senior Executive IT Recruiter and expert ATS Auditor in South Africa.
+    Conduct a highly personalized and deep matching assessment of the candidate against the provided Job Description.
+
+    CANDIDATE PROFILE:
+    Name: ${profile.name}
+    Location: ${profile.location}
+    Target Salary: ${profile.targetSalary}
+    Target Roles: ${profile.targetRoles.join(", ")}
+    Experience: ${profile.experienceSummary}
+    Companies: ${profile.companiesWorkedAt.join(", ")}
+    Skills: ${profile.keySkills.join(", ")}
+
+    JOB DESCRIPTION PASTE:
+    ${jobDescription}
+
+    ASSESSMENT RULES:
+    1. Parse the Job Description to extract the Job Title and Company. If company is not mentioned, use "Enterprise Employer".
+    2. Compare the candidate's skills and experience against the requirements.
+    3. Calculate a highly realistic Match Score (0-100).
+    4. Set Probability of Success: HIGH (80-100%), MEDIUM (60-79%), or LOW (under 60%).
+    5. List matched keywords and missing keywords found in the job description relative to the candidate profile.
+    6. Identify 3 specific gaps in candidate experience or certifications (Gap Analysis).
+    7. Generate a professional, compelling, and fully customized Cover Letter addressed to the hiring manager or recruiter. Highlight the candidate's achievements at ${profile.companiesWorkedAt.slice(0, 2).join(" and ")} and emphasize how their Service Delivery and IT Operations background makes them the ideal fit. Keep it structured, engaging, and in South African business-English style.
+
+    Return strict JSON matching the schema.
+  `;
+
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: JOB_SPECIFIC_ATS_SCHEMA,
+    },
+  });
+
+  if (!response.text) {
+    throw new Error("Failed to generate job specific ATS analysis and cover letter.");
+  }
+
+  return JSON.parse(response.text) as JobSpecificATS;
 }
 
 export const SOUTH_AFRICA_SALARY_BENCHMARKS: SalaryBenchmark[] = [

@@ -1,6 +1,6 @@
 export type ViewType = 'dashboard' | 'profile' | 'analysis' | 'market' | 'saved';
 
-export type ApplicationStatus = 'saved' | 'applied' | 'interviewing' | 'hidden';
+export type ApplicationStatus = 'saved' | 'applied' | 'interviewing' | 'offered' | 'rejected';
 
 export interface JobMatch {
   id: string;
@@ -14,6 +14,8 @@ export interface JobMatch {
   keyGaps: string[];
   applicationLink: string;
   postedDate?: string;
+  status?: ApplicationStatus; // application tracking pipeline status
+  notes?: string;              // user custom notes
 }
 
 export interface DailyReport {
@@ -49,6 +51,17 @@ export interface ATSAnalysis {
   missingKeywords: string[];
   formattingSuggestions: string[];
   executivePitch: string;
+}
+
+export interface JobSpecificATS {
+  jobTitle: string;
+  company: string;
+  matchScore: number;
+  probabilityOfSuccess: 'HIGH' | 'MEDIUM' | 'LOW';
+  matchedKeywords: string[];
+  missingKeywords: string[];
+  gapAnalysis: string[];
+  coverLetter: string;
 }
 
 export interface SalaryBenchmark {
