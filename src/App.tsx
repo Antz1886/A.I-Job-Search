@@ -39,11 +39,15 @@ import {
   Trash2,
   SlidersHorizontal,
   Layers,
-  ArrowUpRight
+  ArrowUpRight,
+  Calendar,
+  CheckSquare,
+  Menu
 } from 'lucide-react';
 import { 
   generateDailyReport, 
   generateATSAnalysis, 
+  generateJobSpecificATS,
   CANDIDATE_PROFILE, 
   SOUTH_AFRICA_SALARY_BENCHMARKS 
 } from './services/geminiService';
@@ -52,7 +56,9 @@ import {
   JobMatch, 
   ViewType, 
   CandidateProfile, 
-  ATSAnalysis 
+  ATSAnalysis,
+  JobSpecificATS,
+  ApplicationStatus
 } from './types';
 
 export default function App() {
@@ -110,8 +116,10 @@ export default function App() {
   // Profile modal states for adding items
   const [newRole, setNewRole] = useState('');
   const [newSkill, setNewSkill] = useState('');
+  const [newCompany, setNewCompany] = useState('');
   const [showAddRole, setShowAddRole] = useState(false);
   const [showAddSkill, setShowAddSkill] = useState(false);
+  const [showAddCompany, setShowAddCompany] = useState(false);
 
   // ATS Analysis state
   const [atsAnalysis, setAtsAnalysis] = useState<ATSAnalysis | null>(() => {
@@ -125,6 +133,47 @@ export default function App() {
   const [loadingAts, setLoadingAts] = useState(false);
   const [copiedPitch, setCopiedPitch] = useState(false);
   const [exportedToast, setExportedToast] = useState(false);
+
+  // Interactive Salary Calculator states
+  const [calcTargetSalary, setCalcTargetSalary] = useState<number>(45000);
+  const [calcSelectedRole, setCalcSelectedRole] = useState<string>('IT Operations Manager');
+
+  // Job Tracker Pipeline State
+  const [jobStatuses, setJobStatuses] = useState<Record<string, ApplicationStatus>>(() => {
+    try {
+      const saved = localStorage.getItem('job_statuses');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const [jobNotes, setJobNotes] = useState<Record<string, string>>(() => {
+    try {
+      const saved = localStorage.getItem('job_notes');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const [activePipelineTab, setActivePipelineTab] = useState<ApplicationStatus | 'all_pipeline'>('all_pipeline');
+
+  // Job-Specific ATS Tailored state
+  const [jobSpecificInput, setJobSpecificInput] = useState<string>('');
+  const [jobSpecificResult, setJobSpecificResult] = useState<JobSpecificATS | null>(() => {
+    try {
+      const saved = localStorage.getItem('job_specific_result');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [loadingJobSpecific, setLoadingJobSpecific] = useState<boolean>(false);
+  const [copiedCoverLetter, setCopiedCoverLetter] = useState<boolean>(false);
+
+  // Mobile navigation slider drawer state
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
   // Persist profile changes
   useEffect(() => {
@@ -152,6 +201,32 @@ export default function App() {
       console.error('Failed to save hidden jobs', e);
     }
   }, [hiddenJobIds]);
+
+  // Persist pipeline tracking states
+  useEffect(() => {
+    try {
+      localStorage.setItem('job_statuses', JSON.stringify(jobStatuses));
+    } catch (e) {
+      console.error('Failed to save job statuses', e);
+    }
+  }, [jobStatuses]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('job_notes', JSON.stringify(jobNotes));
+    } catch (e) {
+      console.error('Failed to save job notes', e);
+    }
+  }, [jobNotes]);
+
+  // Persist job specific ATS
+  useEffect(() => {
+    try {
+      localStorage.setItem('job_specific_result', JSON.stringify(jobSpecificResult));
+    } catch (e) {
+      console.error('Failed to save job specific result', e);
+    }
+  }, [jobSpecificResult]);
 
   const runSearch = async () => {
     setLoading(true);
@@ -184,6 +259,19 @@ export default function App() {
     }
   };
 
+  const runJobSpecificATS = async () => {
+    if (!jobSpecificInput.trim()) return;
+    setLoadingJobSpecific(true);
+    try {
+      const result = await generateJobSpecificATS(profile, jobSpecificInput);
+      setJobSpecificResult(result);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingJobSpecific(false);
+    }
+  };
+
   useEffect(() => {
     if (!report) {
       runSearch();
@@ -191,9 +279,22 @@ export default function App() {
   }, []);
 
   const toggleSaveJob = (id: string) => {
-    setSavedJobIds(prev => 
-      prev.includes(id) ? prev.filter(jId => jId !== id) : [...prev, id]
-    );
+    setSavedJobIds(prev => {
+      const isCurrentlySaved = prev.includes(id);
+      if (isCurrentlySaved) {
+        // Remove tracking status if removed from saved list entirely
+        setJobStatuses(curr => {
+          const updated = { ...curr };
+          delete updated[id];
+          return updated;
+        });
+        return prev.filter(jId => jId !== id);
+      } else {
+        // Default to 'saved' when bookmarking
+        setJobStatuses(curr => ({ ...curr, [id]: 'saved' }));
+        return [...prev, id];
+      }
+    });
   };
 
   const toggleHideJob = (id: string) => {
@@ -221,7 +322,7 @@ export default function App() {
   // Helper to filter all matches based on score filter, search term, and hidden status
   const allJobs = useMemo(() => {
     if (!report) return [];
-    return [...(report.topMatches || []), ...(report.secondaryMatches || [])];
+    return [...(report.topMatches || []), ...(report.secondaryMatches || []).map(j => ({ ...j }))];
   }, [report]);
 
   const filteredJobs = useMemo(() => {
@@ -251,8 +352,18 @@ export default function App() {
   }, [allJobs, filter, searchQuery, hiddenJobIds, showHidden]);
 
   const savedJobsList = useMemo(() => {
-    return allJobs.filter(job => savedJobIds.includes(job.id));
-  }, [allJobs, savedJobIds]);
+    const list = allJobs.filter(job => savedJobIds.includes(job.id));
+    return list.map(job => ({
+      ...job,
+      status: jobStatuses[job.id] || 'saved',
+      notes: jobNotes[job.id] || ''
+    }));
+  }, [allJobs, savedJobIds, jobStatuses, jobNotes]);
+
+  const pipelineFilteredJobs = useMemo(() => {
+    if (activePipelineTab === 'all_pipeline') return savedJobsList;
+    return savedJobsList.filter(job => job.status === activePipelineTab);
+  }, [savedJobsList, activePipelineTab]);
 
   const handleAddRole = () => {
     if (newRole.trim()) {
@@ -284,6 +395,29 @@ export default function App() {
     }));
   };
 
+  const handleAddCompany = () => {
+    if (newCompany.trim()) {
+      setProfile(prev => ({ ...prev, companiesWorkedAt: [...prev.companiesWorkedAt, newCompany.trim()] }));
+      setNewCompany('');
+      setShowAddCompany(false);
+    }
+  };
+
+  const handleRemoveCompany = (companyToRemove: string) => {
+    setProfile(prev => ({
+      ...prev,
+      companiesWorkedAt: prev.companiesWorkedAt.filter(c => c !== companyToRemove)
+    }));
+  };
+
+  const updateJobStatus = (id: string, status: ApplicationStatus) => {
+    setJobStatuses(prev => ({ ...prev, [id]: status }));
+  };
+
+  const updateJobNotes = (id: string, notes: string) => {
+    setJobNotes(prev => ({ ...prev, [id]: notes }));
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans selection:bg-indigo-100">
       {/* Toast Banner */}
@@ -301,7 +435,26 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
+      {/* Mobile Top Header */}
+      <header className="lg:hidden flex items-center justify-between bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-40 shadow-sm">
+        <div className="flex items-center gap-2">
+          <div className="bg-indigo-600 p-2 rounded-lg">
+            <Briefcase className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="font-extrabold text-md tracking-tight text-slate-900 leading-none">Enterprise</h1>
+            <p className="text-[9px] font-black uppercase tracking-[0.15em] text-indigo-600">Recruit Agent</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setMobileMenuOpen(true)}
+          className="p-2 text-slate-600 hover:text-indigo-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-all"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+      </header>
+
+      {/* Sidebar (Desktop) */}
       <nav className="fixed left-0 top-0 h-full w-72 bg-white border-r border-slate-200 p-8 hidden lg:flex flex-col shadow-sm z-40">
         <div className="flex items-center gap-3 mb-10">
           <div className="bg-indigo-600 p-2.5 rounded-xl shadow-indigo-200 shadow-lg">
@@ -364,6 +517,90 @@ export default function App() {
         </div>
       </nav>
 
+      {/* Mobile Sliding Navigation Drawer */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.4 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setMobileMenuOpen(false)}
+              className="fixed inset-0 bg-black z-50 lg:hidden"
+            />
+            {/* Drawer */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed right-0 top-0 bottom-0 w-80 bg-white shadow-2xl z-50 p-8 flex flex-col border-l border-slate-100 lg:hidden"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-2">
+                  <div className="bg-indigo-600 p-2 rounded-lg">
+                    <Briefcase className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h1 className="font-extrabold text-md tracking-tight text-slate-900 leading-none">Enterprise</h1>
+                    <p className="text-[9px] font-black uppercase tracking-[0.15em] text-indigo-600">Recruit Agent</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-2 text-slate-400 hover:text-slate-600 border border-slate-100 rounded-lg"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2 flex-1">
+                <NavItem
+                  icon={<LayoutDashboard className="w-5 h-5" />}
+                  label="Dashboard"
+                  active={currentView === 'dashboard'}
+                  onClick={() => { setCurrentView('dashboard'); setMobileMenuOpen(false); }}
+                  badge={filteredJobs.length}
+                />
+                <NavItem
+                  icon={<Bookmark className="w-5 h-5" />}
+                  label="Saved Roles"
+                  active={currentView === 'saved'}
+                  onClick={() => { setCurrentView('saved'); setMobileMenuOpen(false); }}
+                  badge={savedJobIds.length}
+                />
+                <NavItem
+                  icon={<User className="w-5 h-5" />}
+                  label="Profile & Roles"
+                  active={currentView === 'profile'}
+                  onClick={() => { setCurrentView('profile'); setMobileMenuOpen(false); }}
+                />
+                <NavItem
+                  icon={<FileText className="w-5 h-5" />}
+                  label="CV & ATS Audit"
+                  active={currentView === 'analysis'}
+                  onClick={() => { setCurrentView('analysis'); setMobileMenuOpen(false); }}
+                />
+                <NavItem
+                  icon={<Globe className="w-5 h-5" />}
+                  label="Market Insights"
+                  active={currentView === 'market'}
+                  onClick={() => { setCurrentView('market'); setMobileMenuOpen(false); }}
+                />
+              </div>
+
+              <div className="pt-6 border-t border-slate-100 mt-auto">
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <p className="font-bold text-sm text-slate-900">{profile.name}</p>
+                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mt-0.5">Candidate Profile</p>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Main Content */}
       <main className="lg:ml-72 p-6 md:p-10 max-w-6xl mx-auto">
         <AnimatePresence mode="wait">
@@ -388,7 +625,7 @@ export default function App() {
                   <button 
                     onClick={runSearch}
                     disabled={loading}
-                    className="flex items-center justify-center gap-2 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-700 px-5 py-3 rounded-xl font-bold transition-all disabled:opacity-50 shadow-sm text-sm"
+                    className="flex items-center justify-center gap-2 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-700 px-5 py-3 rounded-xl font-bold transition-all disabled:opacity-50 shadow-sm text-sm animate-none"
                   >
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                     Sync Data
@@ -601,7 +838,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {/* SAVED ROLES VIEW */}
+          {/* SAVED ROLES VIEW - Job CRM Tracker Integration */}
           {currentView === 'saved' && (
             <motion.div 
               key="saved"
@@ -610,13 +847,13 @@ export default function App() {
               exit={{ opacity: 0, x: -20 }}
               className="space-y-8"
             >
-              <header className="flex items-center justify-between">
+              <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-4xl font-black tracking-tight text-slate-900">Saved Roles & Bookmarks</h2>
-                  <p className="text-slate-500 mt-2 font-medium text-sm">Targeted applications saved for outreach and tracking.</p>
+                  <h2 className="text-4xl font-black tracking-tight text-slate-900">Application Pipeline CRM</h2>
+                  <p className="text-slate-500 mt-2 font-medium text-sm">Save roles, schedule follow-ups, keep private records, and manage your progress.</p>
                 </div>
-                <span className="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl text-sm font-bold border border-indigo-200">
-                  {savedJobsList.length} Saved
+                <span className="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl text-sm font-bold border border-indigo-200 inline-block self-start md:self-auto">
+                  {savedJobsList.length} Tracks Saved
                 </span>
               </header>
 
@@ -625,9 +862,9 @@ export default function App() {
                   <div className="bg-indigo-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto text-indigo-600">
                     <Bookmark className="w-8 h-8" />
                   </div>
-                  <h3 className="text-xl font-extrabold text-slate-900">No saved roles yet</h3>
+                  <h3 className="text-xl font-extrabold text-slate-900">No tracked applications yet</h3>
                   <p className="text-slate-500 max-w-md mx-auto text-sm leading-relaxed">
-                    Click "Save Job" on any match in your dashboard to track roles you plan to apply to.
+                    Bookmark jobs on the dashboard to initiate your interactive tracker pipeline.
                   </p>
                   <button 
                     onClick={() => setCurrentView('dashboard')}
@@ -638,17 +875,119 @@ export default function App() {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {savedJobsList.map((job, i) => (
-                    <JobCard 
-                      key={`saved-${job.id}`} 
-                      job={job} 
-                      index={i} 
-                      isSaved={true}
-                      isHidden={hiddenJobIds.includes(job.id)}
-                      onToggleSave={() => toggleSaveJob(job.id)}
-                      onToggleHide={() => toggleHideJob(job.id)}
-                    />
-                  ))}
+                  {/* Pipeline Kanban-Tabs selector */}
+                  <div className="flex flex-wrap items-center gap-2 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm">
+                    <button
+                      onClick={() => setActivePipelineTab('all_pipeline')}
+                      className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${activePipelineTab === 'all_pipeline' ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}
+                    >
+                      All Saved ({savedJobsList.length})
+                    </button>
+                    {(['saved', 'applied', 'interviewing', 'offered', 'rejected'] as ApplicationStatus[]).map((st) => {
+                      const count = savedJobsList.filter(job => job.status === st).length;
+                      const label = st.charAt(0).toUpperCase() + st.slice(1);
+                      return (
+                        <button
+                          key={st}
+                          onClick={() => setActivePipelineTab(st)}
+                          className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${activePipelineTab === st ? 'bg-indigo-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}
+                        >
+                          {label} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="space-y-6">
+                    {pipelineFilteredJobs.length === 0 ? (
+                      <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center text-slate-400">
+                        <CheckSquare className="w-10 h-10 mx-auto mb-2 opacity-55 text-slate-400" />
+                        <p className="text-sm font-bold">No jobs currently in this status phase.</p>
+                      </div>
+                    ) : (
+                      pipelineFilteredJobs.map((job, i) => (
+                        <div key={`saved-${job.id}`} className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+                          <div className="p-8 space-y-6">
+                            {/* Card header */}
+                            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                              <div>
+                                <h4 className="text-xl font-bold text-slate-900">{job.jobTitle}</h4>
+                                <p className="text-sm text-slate-500 font-medium mt-1 flex items-center gap-1.5">
+                                  <Briefcase className="w-4 h-4 text-slate-400" /> {job.company} • <MapPin className="w-4 h-4 text-slate-400" /> {job.location}
+                                </p>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-3">
+                                {/* Direct Status update drop-down */}
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Status:</span>
+                                  <select
+                                    value={job.status}
+                                    onChange={(e) => updateJobStatus(job.id, e.target.value as ApplicationStatus)}
+                                    className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold focus:ring-1 focus:ring-indigo-500 outline-none"
+                                  >
+                                    <option value="saved">Saved / Bookmarked</option>
+                                    <option value="applied">Applied</option>
+                                    <option value="interviewing">Interviewing</option>
+                                    <option value="offered">Offered / Negotiating</option>
+                                    <option value="rejected">Rejected / Closed</option>
+                                  </select>
+                                </div>
+
+                                <a
+                                  href={job.applicationLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-4 py-2 rounded-xl transition-all flex items-center gap-1.5 shadow-sm"
+                                >
+                                  Portal Link <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+
+                                <button
+                                  onClick={() => toggleSaveJob(job.id)}
+                                  className="text-slate-400 hover:text-red-600 p-2 border border-slate-100 rounded-xl hover:bg-red-50/50 transition-colors"
+                                  title="Remove Tracker Entirely"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Dynamic pipeline progress gauge */}
+                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 grid grid-cols-5 gap-1 text-center">
+                              {['saved', 'applied', 'interviewing', 'offered', 'rejected'].map((phase, idx) => {
+                                const currentPhases = ['saved', 'applied', 'interviewing', 'offered', 'rejected'];
+                                const isCurrent = job.status === phase;
+                                const isPassed = currentPhases.indexOf(job.status) >= idx;
+                                return (
+                                  <div key={phase} className="space-y-1">
+                                    <div className={`h-2.5 rounded-full ${isCurrent ? 'bg-indigo-600 animate-pulse' : isPassed ? 'bg-indigo-400' : 'bg-slate-200'}`}></div>
+                                    <span className={`text-[9px] font-black uppercase tracking-wider block ${isCurrent ? 'text-indigo-600 font-extrabold' : 'text-slate-400'}`}>
+                                      {phase}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {/* Personal Outreach Notes Area */}
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                                <Calendar className="w-4 h-4 text-indigo-500" />
+                                CRM Follow-Up Notes, Contacts & Dates
+                              </label>
+                              <textarea
+                                value={job.notes}
+                                onChange={(e) => updateJobNotes(job.id, e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-semibold leading-relaxed text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none min-h-[80px]"
+                                placeholder="e.g. Spoke to HR Recruiter Sarah (sarah@company.co.za). Initial HR Call scheduled for Tuesday 10:00 AM. Mentioned cloud-scale background."
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
               )}
             </motion.div>
@@ -808,20 +1147,57 @@ export default function App() {
                       <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                       Companies Background
                     </h4>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 mb-4">
                       {profile.companiesWorkedAt.map((company, i) => (
-                        <span key={i} className="text-xs font-extrabold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
+                        <span key={i} className="text-xs font-extrabold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 flex items-center gap-2">
                           {company}
+                          <button
+                            onClick={() => handleRemoveCompany(company)}
+                            className="text-indigo-400 hover:text-indigo-700 transition-colors"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
                         </span>
                       ))}
                     </div>
+                    {showAddCompany ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          placeholder="e.g. Vodacom"
+                          className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                          value={newCompany}
+                          onChange={(e) => setNewCompany(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddCompany()}
+                        />
+                        <button
+                          onClick={handleAddCompany}
+                          className="bg-indigo-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold hover:bg-indigo-700"
+                        >
+                          Add
+                        </button>
+                        <button
+                          onClick={() => setShowAddCompany(false)}
+                          className="text-slate-400 hover:text-slate-600 p-1"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setShowAddCompany(true)}
+                        className="bg-white border border-dashed border-slate-300 text-slate-500 hover:text-indigo-600 hover:border-indigo-400 px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1"
+                      >
+                        <Plus className="w-3.5 h-3.5" /> Add Company
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
             </motion.div>
           )}
 
-          {/* CV & ATS AUDIT VIEW */}
+          {/* CV & ATS AUDIT VIEW with Custom Job description Parser */}
           {currentView === 'analysis' && (
             <motion.div 
               key="analysis"
@@ -838,7 +1214,7 @@ export default function App() {
                 <button 
                   onClick={runAtsAudit}
                   disabled={loadingAts}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded.xl font-bold transition-all shadow-md flex items-center gap-2 text-sm disabled:opacity-50"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-md flex items-center gap-2 text-sm disabled:opacity-50"
                 >
                   {loadingAts ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
                   {atsAnalysis ? 'Re-Run ATS Audit' : 'Run ATS Audit'}
@@ -978,6 +1354,113 @@ export default function App() {
                   </div>
                 </div>
               )}
+
+              {/* Job-Specific Targeted Cover Letter & ATS Match tool */}
+              <section className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="bg-emerald-50 p-2.5 rounded-lg">
+                    <Sparkles className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">Job-Specific ATS & Tailored Cover Letter Generator</h3>
+                    <p className="text-xs text-slate-500">Paste any external job description to check your exact matching score, missing core keywords, and compile a custom-addressed executive cover letter.</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <textarea
+                    value={jobSpecificInput}
+                    onChange={(e) => setJobSpecificInput(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs font-semibold leading-relaxed text-slate-700 focus:ring-2 focus:ring-indigo-500 outline-none min-h-[140px]"
+                    placeholder="Paste the target job description details here..."
+                  />
+                  <button
+                    onClick={runJobSpecificATS}
+                    disabled={loadingJobSpecific || !jobSpecificInput.trim()}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-bold text-xs transition-all shadow-md flex items-center gap-2 disabled:opacity-50 animate-none"
+                  >
+                    {loadingJobSpecific ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                    Analyze & Generate Cover Letter
+                  </button>
+                </div>
+
+                {jobSpecificResult && !loadingJobSpecific && (
+                  <div className="mt-8 space-y-6 border-t border-slate-100 pt-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 text-center">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Matched Title & Company</p>
+                        <p className="font-extrabold text-slate-800 text-sm mt-1">{jobSpecificResult.jobTitle}</p>
+                        <p className="text-xs text-indigo-600 font-bold mt-0.5">{jobSpecificResult.company}</p>
+                      </div>
+
+                      <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 text-center">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Custom ATS Match Score</p>
+                        <p className="font-extrabold text-slate-800 text-2xl mt-1 text-emerald-600">{jobSpecificResult.matchScore}%</p>
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">Probability: {jobSpecificResult.probabilityOfSuccess}</span>
+                      </div>
+
+                      <div className="bg-slate-50 p-5 rounded-2xl border border-slate-100 text-center">
+                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Core Gap Analysis</p>
+                        <div className="text-left mt-1 space-y-1">
+                          {jobSpecificResult.gapAnalysis.map((gap, i) => (
+                            <p key={i} className="text-[10px] font-bold text-slate-600 flex items-start gap-1">
+                              <span className="text-amber-500 font-black">•</span>
+                              <span>{gap}</span>
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-white border border-slate-100 p-6 rounded-2xl space-y-4">
+                        <p className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-500" /> Matched Keywords
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {jobSpecificResult.matchedKeywords.map((kw, i) => (
+                            <span key={i} className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">{kw}</span>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-white border border-slate-100 p-6 rounded-2xl space-y-4">
+                        <p className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                          <AlertCircle className="w-4 h-4 text-amber-500" /> Missing High-Impact Keywords
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {jobSpecificResult.missingKeywords.map((kw, i) => (
+                            <span key={i} className="text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-1 rounded-lg border border-amber-100">{kw}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Styled Cover Letter text */}
+                    <div className="bg-slate-900 text-white p-6 rounded-2xl space-y-4 relative overflow-hidden">
+                      <div className="flex items-center justify-between relative z-10">
+                        <p className="text-xs font-black text-indigo-300 uppercase tracking-widest flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4" /> Customized Recruiter Cover Letter
+                        </p>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(jobSpecificResult.coverLetter);
+                            setCopiedCoverLetter(true);
+                            setTimeout(() => setCopiedCoverLetter(false), 2000);
+                          }}
+                          className="bg-white/10 hover:bg-white/20 text-white px-3 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+                        >
+                          {copiedCoverLetter ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5" />}
+                          {copiedCoverLetter ? 'Copied' : 'Copy Cover Letter'}
+                        </button>
+                      </div>
+                      <pre className="text-slate-200 text-xs leading-relaxed font-sans font-semibold relative z-10 bg-white/5 p-5 rounded-xl border border-white/10 overflow-x-auto whitespace-pre-wrap max-h-[300px] overflow-y-auto">
+                        {jobSpecificResult.coverLetter}
+                      </pre>
+                    </div>
+                  </div>
+                )}
+              </section>
             </motion.div>
           )}
 
@@ -1046,6 +1529,128 @@ export default function App() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </section>
+
+              {/* Interactive Salary Negotiation & Calculator */}
+              <section className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm space-y-6">
+                <div className="flex items-center gap-3">
+                  <div className="bg-indigo-50 p-2 rounded-lg">
+                    <DollarSign className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">Salary Comparison & Negotiation Calculator</h3>
+                    <p className="text-xs text-slate-500">Benchmark your target monthly salary against South Africa IT standards and unlock customized negotiation strategies.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {/* Inputs */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Select Target Benchmark Role</label>
+                      <select
+                        value={calcSelectedRole}
+                        onChange={(e) => {
+                          setCalcSelectedRole(e.target.value);
+                          const matching = SOUTH_AFRICA_SALARY_BENCHMARKS.find(b => b.role === e.target.value);
+                          if (matching) {
+                            const numericMedian = parseInt(matching.medianSalary.replace(/[^0-9]/g, ''));
+                            setCalcTargetSalary(numericMedian);
+                          }
+                        }}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                      >
+                        {SOUTH_AFRICA_SALARY_BENCHMARKS.map((b, i) => (
+                          <option key={i} value={b.role}>{b.role}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-2">Your Target Monthly Salary (ZAR)</label>
+                      <div className="relative">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-slate-400 text-sm">R</span>
+                        <input
+                          type="number"
+                          value={calcTargetSalary}
+                          onChange={(e) => setCalcTargetSalary(parseInt(e.target.value) || 0)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                          placeholder="e.g. 45000"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Calculations & Strategy output */}
+                  {(() => {
+                    const benchmark = SOUTH_AFRICA_SALARY_BENCHMARKS.find(b => b.role === calcSelectedRole) || SOUTH_AFRICA_SALARY_BENCHMARKS[0];
+                    const minVal = parseInt(benchmark.minSalary.replace(/[^0-9]/g, ''));
+                    const medVal = parseInt(benchmark.medianSalary.replace(/[^0-9]/g, ''));
+                    const maxVal = parseInt(benchmark.maxSalary.replace(/[^0-9]/g, ''));
+
+                    const percentOfMedian = medVal > 0 ? Math.round((calcTargetSalary / medVal) * 100) : 0;
+                    let positioning = "";
+                    let colorClass = "";
+                    let leverageTips: string[] = [];
+
+                    if (calcTargetSalary < minVal) {
+                      positioning = "Below Market Minimum";
+                      colorClass = "text-amber-600 bg-amber-50 border-amber-200";
+                      leverageTips = [
+                        `Your target is below standard entry benchmarks. Recruiters will accept this quickly, but you are leaving money on the table.`,
+                        `Use your 8+ years of experience at companies like ${profile.companiesWorkedAt[0] || 'MTN'} to justify a minimum target of ${benchmark.minSalary} immediately.`,
+                        `Leverage your ITIL or core service skills to request the median bracket of ${benchmark.medianSalary}.`
+                      ];
+                    } else if (calcTargetSalary <= medVal) {
+                      positioning = "Competitive Market Range (Moderate)";
+                      colorClass = "text-blue-600 bg-blue-50 border-blue-200";
+                      leverageTips = [
+                        "Your target is highly reasonable and fits cleanly within local hiring budgets.",
+                        "Secure the upper end of this bracket by showcasing your experience managing teams.",
+                        "Incorporate your Cloud exposure (Azure, GCP) as a premium value-add during initial HR screenings."
+                      ];
+                    } else if (calcTargetSalary <= maxVal) {
+                      positioning = "Premium Market Segment (High-Value)";
+                      colorClass = "text-emerald-600 bg-emerald-50 border-emerald-200";
+                      leverageTips = [
+                        "You are targeting high-tier enterprise compensation. This requires proving direct business impact.",
+                        "Highlight incident and problem management KPI achievements to prove how you reduce service downtime costs.",
+                        `Emphasize your background at tier-1 organizations like ${profile.companiesWorkedAt.slice(0, 2).join(" or ")} to justify premium rates.`
+                      ];
+                    } else {
+                      positioning = "Super-Premium / Executive Level";
+                      colorClass = "text-indigo-600 bg-indigo-50 border-indigo-200";
+                      leverageTips = [
+                        "Your target is above the standard maximum benchmark. Be prepared to position yourself as an indispensable strategic consultant.",
+                        "Highlight SLA optimization, process automation savings, and cloud adoption strategies that directly impact company bottom line.",
+                        "Be flexible to offer-structured packages, including performance-based bonuses, hybrid flexibility, or telecommunication benefits."
+                      ];
+                    }
+
+                    return (
+                      <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-4">
+                        <div>
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Market Position Assessment</p>
+                          <div className={`mt-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold inline-block ${colorClass}`}>
+                            {positioning} ({percentOfMedian}% of Median)
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <p className="text-xs font-bold text-slate-700">Dynamic Negotiation Leverage Tips:</p>
+                          <ul className="space-y-2 text-xs text-slate-600 leading-relaxed">
+                            {leverageTips.map((tip, idx) => (
+                              <li key={idx} className="flex items-start gap-2">
+                                <span className="text-indigo-500 font-bold">•</span>
+                                <span>{tip}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </section>
 
@@ -1322,11 +1927,15 @@ function ProfileSection({ title, children }: { title: string, children: React.Re
   );
 }
 
+// Ensure unique input name attributes
 function Input({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) {
+  const inputId = label.toLowerCase().replace(/\s+/g, '-');
   return (
     <div className="space-y-2">
-      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{label}</label>
+      <label htmlFor={inputId} className="text-xs font-bold text-slate-500 uppercase tracking-wider">{label}</label>
       <input 
+        id={inputId}
+        name={inputId}
         type="text" 
         className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
         value={value}
