@@ -1,9 +1,29 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { DailyReport, CandidateProfile, JobMatch, ATSAnalysis, SalaryBenchmark } from "../types";
+import { 
+  DailyReport, 
+  CandidateProfile, 
+  JobMatch, 
+  ATSAnalysis, 
+  SalaryBenchmark,
+  CoverLetter,
+  InterviewPrep,
+  FullCVDraft,
+  ProfilePreset
+} from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+let aiClient: GoogleGenAI | null = null;
 
-export const CANDIDATE_PROFILE: CandidateProfile = {
+export function getAi(): GoogleGenAI {
+  if (!aiClient) {
+    const key = (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) || 
+      (typeof window !== 'undefined' && ((window as unknown as { __GEMINI_API_KEY?: string }).__GEMINI_API_KEY || (window as unknown as { GEMINI_API_KEY?: string }).GEMINI_API_KEY)) || 
+      '';
+    aiClient = new GoogleGenAI({ apiKey: key });
+  }
+  return aiClient;
+}
+
+export const DEFAULT_CANDIDATE_PROFILE: CandidateProfile = {
   name: "Ansline Martiens",
   location: "Johannesburg, South Africa (open to remote or hybrid)",
   targetSalary: "R35,000 – R50,000 per month",
@@ -23,6 +43,154 @@ export const CANDIDATE_PROFILE: CandidateProfile = {
     "KPI Management", "Process Improvement", "Automation", "Stakeholder Management"
   ]
 };
+
+// Aliased for backward compatibility
+export const CANDIDATE_PROFILE: CandidateProfile = DEFAULT_CANDIDATE_PROFILE;
+
+export const CAREER_PRESETS: ProfilePreset[] = [
+  {
+    id: "it-ops-leadership",
+    title: "IT Operations & Service Delivery Manager",
+    category: "IT & Infrastructure",
+    description: "Enterprise IT operations, team leadership, SLA/incident governance, and cloud service management.",
+    profile: DEFAULT_CANDIDATE_PROFILE
+  },
+  {
+    id: "software-engineer",
+    title: "Full-Stack Software Engineer",
+    category: "Software Development",
+    description: "Modern web applications, React, Node.js, TypeScript, Python, REST/GraphQL APIs, and Cloud deployment.",
+    profile: {
+      name: "Alex Ndlovu",
+      location: "Cape Town / Remote South Africa",
+      targetSalary: "R55,000 – R75,000 per month",
+      targetRoles: [
+        "Senior Full Stack Developer",
+        "Frontend React Engineer",
+        "Node.js Backend Developer",
+        "Software Engineer (Full-Stack)"
+      ],
+      experienceSummary: "6+ years building high-traffic web applications, microservices, and distributed cloud systems. Skilled in React 18+, Next.js, Node.js, TypeScript, PostgreSQL, Docker, and AWS. Strong track record of shipping scalable SaaS products.",
+      companiesWorkedAt: ["Takealot", "Yoco", "Luno", "Sanlam Digital"],
+      keySkills: [
+        "React", "TypeScript", "Node.js", "Next.js", "PostgreSQL",
+        "Tailwind CSS", "REST APIs", "GraphQL", "AWS", "Docker",
+        "CI/CD", "Jest", "Git", "System Design", "Agile/Scrum"
+      ]
+    }
+  },
+  {
+    id: "devops-cloud",
+    title: "Cloud & DevOps Engineer",
+    category: "Cloud & DevOps",
+    description: "Kubernetes, Terraform, AWS/Azure, CI/CD automation, observability, and container orchestration.",
+    profile: {
+      name: "Kabelo Mokoena",
+      location: "Johannesburg / Remote South Africa",
+      targetSalary: "R60,000 – R85,000 per month",
+      targetRoles: [
+        "Cloud Engineer",
+        "DevOps Specialist",
+        "Site Reliability Engineer (SRE)",
+        "Infrastructure Lead"
+      ],
+      experienceSummary: "5+ years orchestrating hybrid-cloud infrastructure, automating deployments with GitHub Actions and Terraform, managing multi-cluster Kubernetes, and securing AWS/GCP cloud environments with zero downtime.",
+      companiesWorkedAt: ["Vodacom", "Standard Bank Cloud", "Dimension Data"],
+      keySkills: [
+        "AWS", "Kubernetes", "Docker", "Terraform", "CI/CD Pipelines",
+        "Linux Administration", "Python", "Prometheus/Grafana", "Ansible",
+        "Azure", "Infrastructure as Code", "Security Hardening"
+      ]
+    }
+  },
+  {
+    id: "data-analyst-bi",
+    title: "Data Analyst & BI Specialist",
+    category: "Data & Analytics",
+    description: "Data modeling, PowerBI/Tableau visualization, SQL query optimization, Python data analytics, and reporting.",
+    profile: {
+      name: "Zanele Khumalo",
+      location: "Johannesburg / Hybrid",
+      targetSalary: "R40,000 – R58,000 per month",
+      targetRoles: [
+        "Senior Data Analyst",
+        "Business Intelligence Specialist",
+        "Analytics Engineer",
+        "Reporting Lead"
+      ],
+      experienceSummary: "5+ years translating complex datasets into executive decision dashboards. Expert in SQL, PowerBI, Tableau, Python (Pandas/NumPy), and data warehousing (Snowflake, BigQuery). Experienced in retail and fintech analytics.",
+      companiesWorkedAt: ["Discovery Health", "Shoprite Group", "Absa Group"],
+      keySkills: [
+        "SQL", "Power BI", "Tableau", "Python", "Data Warehousing",
+        "ETL Pipelines", "Data Modeling", "Business Intelligence",
+        "DAX", "Excel Advanced", "Snowflake", "A/B Testing"
+      ]
+    }
+  },
+  {
+    id: "product-project-manager",
+    title: "Technical Product / Project Manager",
+    category: "Product & Project Management",
+    description: "Product roadmap delivery, Agile/Scrum ceremonies, stakeholder management, and cross-functional leadership.",
+    profile: {
+      name: "Sipho Dlamini",
+      location: "Pretoria / Remote South Africa",
+      targetSalary: "R50,000 – R70,000 per month",
+      targetRoles: [
+        "Technical Product Manager",
+        "Senior Agile Project Manager",
+        "Scrum Master / Delivery Lead",
+        "Program Manager"
+      ],
+      experienceSummary: "7+ years managing digital transformation, fintech platforms, and mobile apps from concept to launch. Certified Scrum Master (CSM) and PMP with strong business-to-technical translation skills.",
+      companiesWorkedAt: ["Capitec Bank", "Old Mutual", "Multichoice"],
+      keySkills: [
+        "Product Management", "Agile & Scrum", "Jira / Confluence",
+        "Roadmapping", "Sprint Planning", "Stakeholder Governance",
+        "User Research", "KPI Analytics", "Risk Management", "PMP"
+      ]
+    }
+  },
+  {
+    id: "customer-success-lead",
+    title: "Customer Success & Enterprise Support Specialist",
+    category: "Customer Support & CX",
+    description: "High-touch customer onboarding, retention, Zendesk/Salesforce administration, and escalation management.",
+    profile: {
+      name: "Nadia Pieterse",
+      location: "Durban / Remote",
+      targetSalary: "R30,000 – R45,000 per month",
+      targetRoles: [
+        "Customer Success Manager",
+        "Client Relationship Lead",
+        "Senior Technical Support Specialist",
+        "CX Operations Lead"
+      ],
+      experienceSummary: "6+ years managing client success for B2B SaaS and enterprise accounts. Proven record of reducing churn by 28% and exceeding Net Promoter Score (NPS) targets through proactive outreach and swift incident resolution.",
+      companiesWorkedAt: ["Zoho Partner Africa", "Webafrica", "Afrihost"],
+      keySkills: [
+        "Customer Success", "Zendesk", "Salesforce", "Churn Prevention",
+        "Onboarding", "SLA Monitoring", "Client Relationship Mgmt",
+        "Conflict Resolution", "Technical Troubleshooting", "NPS Growth"
+      ]
+    }
+  }
+];
+
+const CANDIDATE_PROFILE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    name: { type: Type.STRING },
+    location: { type: Type.STRING },
+    targetSalary: { type: Type.STRING },
+    targetRoles: { type: Type.ARRAY, items: { type: Type.STRING } },
+    experienceSummary: { type: Type.STRING },
+    companiesWorkedAt: { type: Type.ARRAY, items: { type: Type.STRING } },
+    keySkills: { type: Type.ARRAY, items: { type: Type.STRING } }
+  },
+  required: ["name", "location", "targetSalary", "targetRoles", "experienceSummary", "companiesWorkedAt", "keySkills"]
+};
+
 
 const REPORT_SCHEMA = {
   type: Type.OBJECT,
@@ -96,12 +264,84 @@ const ATS_SCHEMA = {
     matchedKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
     missingKeywords: { type: Type.ARRAY, items: { type: Type.STRING } },
     formattingSuggestions: { type: Type.ARRAY, items: { type: Type.STRING } },
-    executivePitch: { type: Type.STRING }
+    executivePitch: { type: Type.STRING },
+    optimizedSummaries: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          style: { type: Type.STRING },
+          summaryText: { type: Type.STRING },
+        },
+        required: ["style", "summaryText"]
+      }
+    },
+    recommendedBulletPoints: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          originalConcept: { type: Type.STRING },
+          enhancedBullet: { type: Type.STRING },
+          targetRole: { type: Type.STRING },
+          addedKeywords: { type: Type.ARRAY, items: { type: Type.STRING } }
+        },
+        required: ["originalConcept", "enhancedBullet", "targetRole", "addedKeywords"]
+      }
+    },
+    suggestedSkillsToAdd: { type: Type.ARRAY, items: { type: Type.STRING } }
   },
   required: [
     "overallAtsScore", "keywordMatchRate", "formattingScore", "impactScore",
-    "matchedKeywords", "missingKeywords", "formattingSuggestions", "executivePitch"
+    "matchedKeywords", "missingKeywords", "formattingSuggestions", "executivePitch",
+    "optimizedSummaries", "recommendedBulletPoints", "suggestedSkillsToAdd"
   ]
+};
+
+const COVER_LETTER_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    jobTitle: { type: Type.STRING },
+    company: { type: Type.STRING },
+    letterText: { type: Type.STRING },
+    keyHighlightsUsed: { type: Type.ARRAY, items: { type: Type.STRING } }
+  },
+  required: ["jobTitle", "company", "letterText", "keyHighlightsUsed"]
+};
+
+const INTERVIEW_PREP_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    targetRole: { type: Type.STRING },
+    questions: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          question: { type: Type.STRING },
+          category: { type: Type.STRING, enum: ["Technical", "Behavioral", "Leadership", "Scenario"] },
+          modelAnswerStar: { type: Type.STRING },
+          keyTip: { type: Type.STRING }
+        },
+        required: ["question", "category", "modelAnswerStar", "keyTip"]
+      }
+    }
+  },
+  required: ["targetRole", "questions"]
+};
+
+const CV_DRAFT_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    fullName: { type: Type.STRING },
+    headline: { type: Type.STRING },
+    executiveSummary: { type: Type.STRING },
+    coreCompetencies: { type: Type.ARRAY, items: { type: Type.STRING } },
+    impactBullets: { type: Type.ARRAY, items: { type: Type.STRING } },
+    suggestedCertifications: { type: Type.ARRAY, items: { type: Type.STRING } },
+    fullMarkdownCV: { type: Type.STRING }
+  },
+  required: ["fullName", "headline", "executiveSummary", "coreCompetencies", "impactBullets", "suggestedCertifications", "fullMarkdownCV"]
 };
 
 function isGenericHomepage(urlStr: string): boolean {
@@ -126,104 +366,181 @@ function isGenericHomepage(urlStr: string): boolean {
   }
 }
 
-function resolveDirectOrSearchUrl(
+export function cleanSearchQueryText(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/[/\-\\|()\[\]{}:;,\t\n]/g, ' ')
+    .replace(/["'’`]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function getPlatformSearchUrls(jobTitle: string, company: string, location: string = 'South Africa') {
+  const cleanTitle = cleanSearchQueryText(jobTitle);
+  const cleanCompany = cleanSearchQueryText(company);
+  const combined = `${cleanTitle} ${cleanCompany}`.trim();
+  const encCombined = encodeURIComponent(combined);
+  const encLocation = encodeURIComponent(location || 'South Africa');
+
+  return {
+    linkedin: `https://www.linkedin.com/jobs/search/?keywords=${encCombined}&location=${encLocation}`,
+    pnet: `https://www.pnet.co.za/jobs/search?keywords=${encCombined}`,
+    indeed: `https://za.indeed.com/jobs?q=${encCombined}&l=${encLocation}`,
+    careers24: `https://www.careers24.com/jobs/se-${encodeURIComponent(cleanTitle)}/`,
+    offerzen: `https://www.offerzen.com/jobs?query=${encodeURIComponent(cleanTitle)}`,
+    google: `https://www.google.com/search?q=${encodeURIComponent(`${cleanTitle} ${cleanCompany} South Africa job application`)}`,
+    companySite: `https://www.google.com/search?q=${encodeURIComponent(`site:${cleanCompany.toLowerCase().replace(/[^a-z0-9]/g, '')}.co.za OR site:${cleanCompany.toLowerCase().replace(/[^a-z0-9]/g, '')}.com careers ${cleanTitle}`)}`
+  };
+}
+
+function isUrlInGrounding(url: string, groundingChunks?: Array<Record<string, unknown>>): boolean {
+  if (!url || !groundingChunks || !Array.isArray(groundingChunks)) return false;
+  const lowerUrl = url.toLowerCase().trim();
+  return groundingChunks.some(chunk => {
+    const web = (chunk.web as { uri?: string }) || {};
+    const uri = (web.uri || (chunk.uri as string) || "").toLowerCase().trim();
+    return uri && (uri === lowerUrl || uri.includes(lowerUrl) || lowerUrl.includes(uri));
+  });
+}
+
+export function resolveDirectOrSearchUrl(
   rawLink: string,
   jobTitle: string,
   company: string,
   groundingChunks?: Array<Record<string, unknown>>
 ): string {
-  if (groundingChunks && Array.isArray(groundingChunks)) {
-    for (const chunk of groundingChunks) {
-      const web = (chunk.web as { uri?: string; title?: string }) || {};
-      const uri = web.uri || (chunk.uri as string) || "";
-      const title = web.title || (chunk.title as string) || "";
+  const urls = getPlatformSearchUrls(jobTitle, company, 'South Africa');
 
-      if (uri && !isGenericHomepage(uri)) {
-        const lowerUri = uri.toLowerCase();
-        const lowerTitle = title.toLowerCase();
-        const lowerCompany = company.toLowerCase();
-        const lowerJobTitle = jobTitle.toLowerCase();
-
-        const companyMatch = lowerCompany && (lowerUri.includes(lowerCompany.replace(/\s+/g, "")) || lowerTitle.includes(lowerCompany));
-        const titleMatch = lowerJobTitle && (lowerTitle.includes(lowerJobTitle) || lowerUri.includes(lowerJobTitle.split(" ")[0]));
-
-        if (companyMatch || titleMatch) {
-          return uri;
-        }
-      }
-    }
+  if (!rawLink || isGenericHomepage(rawLink)) {
+    return urls.linkedin;
   }
 
-  if (rawLink && !isGenericHomepage(rawLink)) {
+  const lowerRaw = rawLink.toLowerCase();
+
+  // If rawLink is a static LinkedIn view URL (e.g. linkedin.com/jobs/view/12345678)
+  // or contains quotes/slashes, replace with live LinkedIn search URL to guarantee zero 404s
+  if (lowerRaw.includes('linkedin.com/jobs/view/') || rawLink.includes('%22') || rawLink.includes('"')) {
+    if (groundingChunks && isUrlInGrounding(rawLink, groundingChunks) && !lowerRaw.includes('%22')) {
+      return rawLink;
+    }
+    return urls.linkedin;
+  }
+
+  if (groundingChunks && isUrlInGrounding(rawLink, groundingChunks)) {
     return rawLink;
   }
 
-  const lowerRaw = (rawLink || "").toLowerCase();
-  const titleAndCompany = `${jobTitle} ${company}`;
-  const encodedQuery = encodeURIComponent(titleAndCompany);
+  if (lowerRaw.includes("pnet.co.za")) return urls.pnet;
+  if (lowerRaw.includes("indeed.com")) return urls.indeed;
+  if (lowerRaw.includes("offerzen.com")) return urls.offerzen;
+  if (lowerRaw.includes("careers24.com")) return urls.careers24;
+  if (lowerRaw.includes("linkedin.com")) return urls.linkedin;
 
-  if (lowerRaw.includes("linkedin.com")) {
-    return `https://www.linkedin.com/jobs/search/?keywords=${encodeURIComponent(`${titleAndCompany} Johannesburg`)}`;
-  }
-  if (lowerRaw.includes("pnet.co.za")) {
-    return `https://www.pnet.co.za/jobs/search?keywords=${encodedQuery}`;
-  }
-  if (lowerRaw.includes("indeed.com")) {
-    return `https://za.indeed.com/jobs?q=${encodedQuery}&l=Johannesburg`;
-  }
-  if (lowerRaw.includes("offerzen.com")) {
-    return `https://www.offerzen.com/jobs?query=${encodeURIComponent(jobTitle)}`;
-  }
-  if (lowerRaw.includes("careers24.com")) {
-    return `https://www.careers24.com/jobs/kw-${encodeURIComponent(`${jobTitle}-${company}`)}/`;
-  }
-
-  return `https://www.google.com/search?q=${encodeURIComponent(`${company} "${jobTitle}" Johannesburg job application`)}`;
+  return urls.linkedin;
 }
 
-function sanitizeReportLinks(report: DailyReport, groundingChunks?: Array<Record<string, unknown>>): DailyReport {
+export function sanitizeReportLinks(report: DailyReport, groundingChunks?: Array<Record<string, unknown>>): DailyReport {
+  if (!report) return report;
   const sanitizeJob = (job: JobMatch): JobMatch => ({
     ...job,
     applicationLink: resolveDirectOrSearchUrl(job.applicationLink, job.jobTitle, job.company, groundingChunks),
   });
 
+  const topMatches = (report.topMatches || []).map(sanitizeJob);
+  const secondaryMatches = (report.secondaryMatches || []).map(sanitizeJob);
+  const totalCount = topMatches.length + secondaryMatches.length;
+
+  const highMatches = topMatches.filter(j => j.probabilityOfSuccess === 'HIGH').length + secondaryMatches.filter(j => j.probabilityOfSuccess === 'HIGH').length;
+  const mediumMatches = totalCount - highMatches;
+
   return {
     ...report,
-    topMatches: (report.topMatches || []).map(sanitizeJob),
-    secondaryMatches: (report.secondaryMatches || []).map(sanitizeJob),
+    topMatches,
+    secondaryMatches,
+    summary: {
+      totalJobsFound: totalCount,
+      highMatches: highMatches,
+      mediumMatches: mediumMatches,
+    },
   };
+}
+
+/**
+ * Universal CV / Resume Parser
+ * Parses pasted raw resume text or job seeker summary into a structured CandidateProfile
+ */
+export async function parseCVToProfile(cvText: string): Promise<CandidateProfile> {
+  const prompt = `
+    You are an expert AI Talent Acquisition and Resume Parsing specialist.
+    Parse the following raw candidate resume/CV or bio text into a structured Candidate Profile:
+
+    RAW CANDIDATE TEXT:
+    """
+    ${cvText}
+    """
+
+    EXTRACT THE FOLLOWING FIELDS:
+    - name: Candidate's Full Name (or "Candidate" if not mentioned).
+    - location: Candidate's preferred location or current residence (e.g. "Johannesburg, South Africa (Open to Remote)").
+    - targetSalary: Estimated target salary range or typical market rate for their level in ZAR/USD (e.g. "R45,000 – R65,000 per month").
+    - targetRoles: Top 3-5 specific job titles the candidate is qualified for.
+    - experienceSummary: A concise 2-4 sentence executive summary of their background, years of experience, and key accomplishments.
+    - companiesWorkedAt: List of previous companies/employers mentioned.
+    - keySkills: 10-16 technical, operational, and domain skills mentioned or implied.
+
+    Return STRICT JSON matching the schema.
+  `;
+
+  const response = await getAi().models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: CANDIDATE_PROFILE_SCHEMA,
+    },
+  });
+
+  if (!response.text) {
+    throw new Error("Failed to parse resume");
+  }
+
+  return JSON.parse(response.text) as CandidateProfile;
 }
 
 export async function generateDailyReport(profile: CandidateProfile): Promise<DailyReport> {
   const prompt = `
     You are an expert AI Job Search & Recruitment Agent.
-    Your role is to automatically find, evaluate, and rank job opportunities for the candidate:
+    Your role is to automatically find, evaluate, and rank job opportunities tailored specifically for this candidate:
 
     CANDIDATE PROFILE:
     Name: ${profile.name}
     Location: ${profile.location}
-    Target Salary: ${profile.targetSalary}
+    Target Salary: ${profile.targetSalary || "Market Rate"}
     Target Roles: ${profile.targetRoles.join(", ")}
     Experience Summary: ${profile.experienceSummary}
     Companies Worked At: ${profile.companiesWorkedAt.join(", ")}
     Key Skills: ${profile.keySkills.join(", ")}
 
     OBJECTIVES:
-    1. Search for real, active job listings for target roles in Johannesburg, South Africa or Remote South Africa.
-    2. Use Google Search to locate real job postings from LinkedIn, Indeed, PNet, OfferZen, Careers24, and corporate career portals.
-    3. **CRITICAL - LINK INTEGRITY RULE**:
+    1. Search for real, active job listings matching target roles in ${profile.location} or Remote.
+    2. Provide a COMPREHENSIVE list of at least 8 to 12 distinct job opportunities.
+       - Place 5 to 7 high-alignment roles in topMatches.
+       - Place 3 to 5 additional strategic roles in secondaryMatches.
+    3. Use Google Search to locate real job postings from LinkedIn, Indeed, PNet, OfferZen, Careers24, and corporate career portals.
+    4. **CRITICAL - LINK INTEGRITY RULE**:
        - NEVER output generic homepages like "https://www.linkedin.com" or "https://www.pnet.co.za".
        - Return the EXACT, full deep link URL to the job post.
-       - If an exact job view URL is unavailable, return a direct platform search URL like "https://www.linkedin.com/jobs/search/?keywords=JobTitle+Company+Johannesburg".
-    4. Include only jobs matching at least 60% of the candidate's skills and within or near the salary expectation (R35k-R50k/month).
-    5. Calculate a MATCH SCORE (0-100%).
-    6. Determine PROBABILITY OF SUCCESS: HIGH (80-100%), MEDIUM (60-79%).
-    7. Assign a unique string "id" to each job.
+       - If an exact job view URL is unavailable, return a direct platform search URL like "https://www.linkedin.com/jobs/search/?keywords=JobTitle+Company+Location".
+    5. Include only jobs matching at least 60% of the candidate's skills and within or near their target salary expectations (${profile.targetSalary}).
+    6. Calculate a MATCH SCORE (0-100%).
+    7. Determine PROBABILITY OF SUCCESS: HIGH (80-100%), MEDIUM (60-79%).
+    8. Assign a unique string "id" to each job.
+    9. Ensure summary.totalJobsFound equals the EXACT count of all items in topMatches and secondaryMatches combined.
 
     Return a DAILY REPORT in strict JSON format.
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await getAi().models.generateContent({
     model: "gemini-3-flash-preview",
     contents: prompt,
     config: {
@@ -247,7 +564,7 @@ export async function generateDailyReport(profile: CandidateProfile): Promise<Da
 export async function generateATSAnalysis(profile: CandidateProfile): Promise<ATSAnalysis> {
   const prompt = `
     You are a Senior Executive Talent Recruiter and ATS (Applicant Tracking System) Specialist.
-    Analyze the following Candidate Profile for high-level Enterprise IT leadership roles in South Africa (e.g. IT Operations Manager, Service Delivery Manager, Technical Account Manager).
+    Analyze the following Candidate Profile for roles matching: ${profile.targetRoles.join(", ")} in ${profile.location}.
 
     CANDIDATE PROFILE:
     Name: ${profile.name}
@@ -263,14 +580,17 @@ export async function generateATSAnalysis(profile: CandidateProfile): Promise<AT
     3. Calculate Formatting Readiness Score (0-100%).
     4. Calculate Executive Impact Score (0-100%).
     5. List top 6-8 matched enterprise keywords found in profile.
-    6. List top 4-6 missing critical keywords expected by recruiters in South Africa (e.g. ITIL v4, SOC 2, COBIT, ServiceNow, DevOps Governance, ISO 27001).
+    6. List top 4-6 missing critical keywords expected by recruiters for these target roles.
     7. Provide 3 high-impact actionable CV formatting or phrasing improvements.
     8. Write a compelling 3-sentence Executive Elevator Pitch for recruiter outreach.
+    9. Provide 3 optimized profile summary variations (e.g., Executive Leadership, Results-Driven Metric Focused, Technical Strategy).
+    10. Generate 4 high-impact metric-driven bullet points formatted with STAR methodology (Situation, Task, Action, Result) with specific percentages, financial metrics, and measurable outcomes.
+    11. Provide 5 strategic skills to add to boost search visibility.
 
     Return strict JSON matching the schema.
   `;
 
-  const response = await ai.models.generateContent({
+  const response = await getAi().models.generateContent({
     model: "gemini-3-flash-preview",
     contents: prompt,
     config: {
@@ -284,6 +604,128 @@ export async function generateATSAnalysis(profile: CandidateProfile): Promise<AT
   }
 
   return JSON.parse(response.text) as ATSAnalysis;
+}
+
+export async function generateCoverLetter(
+  profile: CandidateProfile, 
+  targetJobTitle: string, 
+  company: string
+): Promise<CoverLetter> {
+  const prompt = `
+    Write a highly persuasive, professional, ATS-optimized Cover Letter tailored for ${profile.name} applying for the role of "${targetJobTitle}" at "${company}".
+    
+    CANDIDATE DETAILS:
+    - Name: ${profile.name}
+    - Location: ${profile.location}
+    - Experience: ${profile.experienceSummary}
+    - Key Skills: ${profile.keySkills.join(", ")}
+    - Previous Companies: ${profile.companiesWorkedAt.join(", ")}
+    - Target Salary Range: ${profile.targetSalary}
+
+    RULES:
+    - Keep tone executive, confident, and highly customized to ${company}.
+    - Highlight specific operational leadership metrics, SLA track records, technical achievements, or relevant competencies.
+    - Address how ${profile.name} solves key operational and organizational pain points for ${company} in the "${targetJobTitle}" role.
+    - Length: 3-4 structured, well-spaced paragraphs.
+  `;
+
+  const response = await getAi().models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: COVER_LETTER_SCHEMA,
+    },
+  });
+
+  if (!response.text) {
+    throw new Error("Failed to generate cover letter");
+  }
+
+  return JSON.parse(response.text) as CoverLetter;
+}
+
+export async function generateInterviewPrep(
+  profile: CandidateProfile,
+  targetRole: string
+): Promise<InterviewPrep> {
+  const prompt = `
+    You are an Executive Hiring Manager and Senior Recruiter.
+    Prepare a comprehensive Interview Preparation package for ${profile.name} applying for "${targetRole}".
+
+    CANDIDATE CONTEXT:
+    - Target Role: ${targetRole}
+    - Candidate Skills: ${profile.keySkills.join(", ")}
+    - Background: ${profile.experienceSummary}
+    - Previous Companies: ${profile.companiesWorkedAt.join(", ")}
+
+    Provide 5 high-yield interview questions:
+    - 1 Technical/Functional Domain question tailored to "${targetRole}"
+    - 2 Behavioral questions (e.g. Handling critical incidents, conflict resolution, or team alignment)
+    - 1 Leadership/Stakeholder Management question
+    - 1 Scenario-Based Problem Solving / Crisis Management question.
+
+    For each question, provide:
+    1. The Question text.
+    2. Category (Technical, Behavioral, Leadership, Scenario).
+    3. Model STAR Answer (Situation, Task, Action, Result) referencing realistic industry situations.
+    4. Pro Tip for interview delivery.
+  `;
+
+  const response = await getAi().models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: INTERVIEW_PREP_SCHEMA,
+    },
+  });
+
+  if (!response.text) {
+    throw new Error("Failed to generate interview prep");
+  }
+
+  return JSON.parse(response.text) as InterviewPrep;
+}
+
+export async function generateFullCVDraft(
+  profile: CandidateProfile,
+  targetRole: string
+): Promise<FullCVDraft> {
+  const prompt = `
+    You are an Executive CV Writer and ATS Resume Optimization Specialist.
+    Create a complete, beautifully structured, ATS-optimized CV Draft for ${profile.name} targeting the role: "${targetRole}".
+
+    CANDIDATE INFO:
+    - Name: ${profile.name}
+    - Location: ${profile.location}
+    - Experience: ${profile.experienceSummary}
+    - Companies: ${profile.companiesWorkedAt.join(", ")}
+    - Skills: ${profile.keySkills.join(", ")}
+
+    REQUIREMENTS:
+    - Craft a compelling executive headline tailored to "${targetRole}".
+    - Write a high-impact executive summary.
+    - List core competencies structured for ATS parsers.
+    - Write 6 metric-driven experience bullet points using action verbs (e.g., "Spearheaded", "Architected", "Optimized", "Delivered", "Accelerated").
+    - Provide recommended certifications to boost visibility for "${targetRole}".
+    - Provide a full clean Markdown document of the entire CV ready for copying or exporting to PDF/Word.
+  `;
+
+  const response = await getAi().models.generateContent({
+    model: "gemini-3-flash-preview",
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: CV_DRAFT_SCHEMA,
+    },
+  });
+
+  if (!response.text) {
+    throw new Error("Failed to generate full CV draft");
+  }
+
+  return JSON.parse(response.text) as FullCVDraft;
 }
 
 export const SOUTH_AFRICA_SALARY_BENCHMARKS: SalaryBenchmark[] = [
@@ -302,6 +744,38 @@ export const SOUTH_AFRICA_SALARY_BENCHMARKS: SalaryBenchmark[] = [
     maxSalary: "R62,000",
     demandTrend: "HIGH",
     topSkills: ["Stakeholder Relations", "Vendor Governance", "KPI Tracking", "ServiceNow"]
+  },
+  {
+    role: "Senior Full Stack Software Engineer",
+    minSalary: "R55,000",
+    medianSalary: "R72,000",
+    maxSalary: "R95,000",
+    demandTrend: "HIGH",
+    topSkills: ["React/TypeScript", "Node.js", "PostgreSQL", "Cloud Architecture"]
+  },
+  {
+    role: "Cloud & DevOps Specialist",
+    minSalary: "R50,000",
+    medianSalary: "R68,000",
+    maxSalary: "R90,000",
+    demandTrend: "HIGH",
+    topSkills: ["Kubernetes", "AWS / Azure", "Terraform", "CI/CD Automation"]
+  },
+  {
+    role: "Data Analyst & BI Specialist",
+    minSalary: "R35,000",
+    medianSalary: "R48,000",
+    maxSalary: "R65,000",
+    demandTrend: "HIGH",
+    topSkills: ["SQL", "Power BI", "Python (Pandas)", "Data Modeling"]
+  },
+  {
+    role: "Technical Product Manager",
+    minSalary: "R48,000",
+    medianSalary: "R62,000",
+    maxSalary: "R82,000",
+    demandTrend: "HIGH",
+    topSkills: ["Agile/Scrum", "User Journey", "Jira", "Stakeholder Alignment"]
   },
   {
     role: "Technical Account Manager",
@@ -326,5 +800,14 @@ export const SOUTH_AFRICA_SALARY_BENCHMARKS: SalaryBenchmark[] = [
     maxSalary: "R52,000",
     demandTrend: "STABLE",
     topSkills: ["Shift Roster Mgmt", "Tier 2/3 Support", "Ticketing SLA", "Coaching"]
+  },
+  {
+    role: "Customer Success / CX Manager",
+    minSalary: "R30,000",
+    medianSalary: "R42,000",
+    maxSalary: "R55,000",
+    demandTrend: "HIGH",
+    topSkills: ["Zendesk/Salesforce", "Churn Reduction", "Account Onboarding", "NPS Growth"]
   }
 ];
+

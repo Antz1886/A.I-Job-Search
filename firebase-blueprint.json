@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "entities": {
+    "UserProfile": {
+      "collection": "users",
+      "path": "users/{userId}",
+      "description": "User profile with their career preferences and active candidate resume profile",
+      "fields": {
+        "id": { "type": "string", "description": "Unique user ID" },
+        "email": { "type": "string", "description": "User email address" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "photoURL": { "type": "string", "description": "Profile picture URL" },
+        "createdAt": { "type": "string", "description": "Creation ISO timestamp" },
+        "updatedAt": { "type": "string", "description": "Last update ISO timestamp" },
+        "candidateProfile": { "type": "object", "description": "Active CandidateProfile object" }
+      }
+    },
+    "SavedJob": {
+      "collection": "savedJobs",
+      "path": "users/{userId}/savedJobs/{jobId}",
+      "description": "Jobs tracked and saved by the user with status pipeline",
+      "fields": {
+        "id": { "type": "string", "description": "Unique job listing ID" },
+        "job": { "type": "object", "description": "Job details payload" },
+        "status": { "type": "string", "description": "Application tracker status" },
+        "notes": { "type": "string", "description": "User custom notes" },
+        "savedAt": { "type": "string", "description": "Saved timestamp" },
+        "updatedAt": { "type": "string", "description": "Updated timestamp" }
+      }
+    },
+    "SavedSearch": {
+      "collection": "savedSearches",
+      "path": "users/{userId}/savedSearches/{searchId}",
+      "description": "User saved job search criteria and notification alerts",
+      "fields": {
+        "id": { "type": "string", "description": "Search query ID" },
+        "name": { "type": "string", "description": "Label for search" },
+        "query": { "type": "string", "description": "Search keywords" },
+        "location": { "type": "string", "description": "Location filter" },
+        "createdAt": { "type": "string", "description": "Timestamp" }
+      }
+    }
+  }
+}

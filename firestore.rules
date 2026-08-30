@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if request is for the caller's own record
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // User profile document rules
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+
+      // User saved jobs subcollection
+      match /savedJobs/{jobId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // User saved searches subcollection
+      match /savedSearches/{searchId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // User reports subcollection
+      match /reports/{reportId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // User documents (cover letters, cv drafts) subcollection
+      match /documents/{docId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}

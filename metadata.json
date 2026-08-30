@@ -1,5 +1,7 @@
 {
-  "name": "AI Job Search Agent",
-  "description": "Automatically find, evaluate, and rank job opportunities for Ansline Martiens based on her CV and career goals.",
-  "requestFramePermissions": []
+  "name": "AI Job Search & Career Copilot",
+  "description": "An intelligent, shareable job search agent, ATS resume scanner, and career matching engine for job seekers across South Africa and remote markets.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
+

@@ -1,6 +1,23 @@
-export type ViewType = 'dashboard' | 'profile' | 'analysis' | 'market' | 'saved';
+export type ViewType = 'dashboard' | 'tracker' | 'saved' | 'profile' | 'analysis' | 'market';
 
-export type ApplicationStatus = 'saved' | 'applied' | 'interviewing' | 'hidden';
+export type ApplicationStatus = 'saved' | 'applied' | 'interviewing' | 'offer' | 'rejected';
+
+export interface ApplicationTrackerEntry {
+  jobId: string;
+  jobTitle: string;
+  company: string;
+  location: string;
+  salary?: string;
+  matchScore?: number;
+  applicationLink?: string;
+  status: ApplicationStatus;
+  appliedDate?: string;
+  interviewDate?: string;
+  offerDate?: string;
+  notes?: string;
+  lastUpdated: string;
+  customAdded?: boolean;
+}
 
 export interface JobMatch {
   id: string;
@@ -15,6 +32,8 @@ export interface JobMatch {
   applicationLink: string;
   postedDate?: string;
 }
+
+export type JobOpportunity = JobMatch;
 
 export interface DailyReport {
   summary: {
@@ -40,6 +59,18 @@ export interface CandidateProfile {
   keySkills: string[];
 }
 
+export interface OptimizedSummary {
+  style: string;
+  summaryText: string;
+}
+
+export interface RecommendedBulletPoint {
+  originalConcept: string;
+  enhancedBullet: string;
+  targetRole: string;
+  addedKeywords: string[];
+}
+
 export interface ATSAnalysis {
   overallAtsScore: number;
   keywordMatchRate: number;
@@ -49,6 +80,38 @@ export interface ATSAnalysis {
   missingKeywords: string[];
   formattingSuggestions: string[];
   executivePitch: string;
+  optimizedSummaries?: OptimizedSummary[];
+  recommendedBulletPoints?: RecommendedBulletPoint[];
+  suggestedSkillsToAdd?: string[];
+}
+
+export interface CoverLetter {
+  jobTitle: string;
+  company: string;
+  letterText: string;
+  keyHighlightsUsed: string[];
+}
+
+export interface InterviewQuestion {
+  question: string;
+  category: 'Technical' | 'Behavioral' | 'Leadership' | 'Scenario';
+  modelAnswerStar: string;
+  keyTip: string;
+}
+
+export interface InterviewPrep {
+  targetRole: string;
+  questions: InterviewQuestion[];
+}
+
+export interface FullCVDraft {
+  fullName: string;
+  headline: string;
+  executiveSummary: string;
+  coreCompetencies: string[];
+  impactBullets: string[];
+  suggestedCertifications: string[];
+  fullMarkdownCV: string;
 }
 
 export interface SalaryBenchmark {
@@ -59,3 +122,33 @@ export interface SalaryBenchmark {
   demandTrend: 'HIGH' | 'STABLE' | 'EMERGING';
   topSkills: string[];
 }
+
+export interface ProfilePreset {
+  id: string;
+  name?: string;
+  title?: string;
+  category?: string;
+  description: string;
+  profile: CandidateProfile;
+}
+
+export interface SavedProfileRecord {
+  id: string;
+  name: string;
+  targetRole: string;
+  profile: CandidateProfile;
+  updatedAt: string;
+}
+
+export interface SavedSearch {
+  id: string;
+  name: string;
+  query: string;
+  filter: 'ALL' | 'HIGH' | 'MEDIUM';
+  createdAt: string;
+  newMatchesCount: number;
+  lastCheckedJobIds: string[];
+  hasNewAlert?: boolean;
+}
+
+
