@@ -134,14 +134,7 @@ export default function App() {
     }
   });
 
-  const [savedJobIds, setSavedJobIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem('saved_job_ids');
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [savedJobIds, setSavedJobIds] = useState<string[]>([]);
 
   const [hiddenJobIds, setHiddenJobIds] = useState<string[]>(() => {
     try {
@@ -282,14 +275,7 @@ export default function App() {
   const [exportedToast, setExportedToast] = useState(false);
 
   // Application Tracker states
-  const [trackerEntries, setTrackerEntries] = useState<Record<string, ApplicationTrackerEntry>>(() => {
-    try {
-      const saved = localStorage.getItem('tracked_applications');
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
+  const [trackerEntries, setTrackerEntries] = useState<Record<string, ApplicationTrackerEntry>>({});
 
   const [trackerFilter, setTrackerFilter] = useState<'ALL' | ApplicationStatus>('ALL');
   const [trackerLayout, setTrackerLayout] = useState<'kanban' | 'list'>('kanban');
@@ -379,28 +365,28 @@ export default function App() {
           const cloudJobs = await loadSavedJobsFromCloud(user.uid);
           if (cloudJobs && cloudJobs.length > 0) {
             const cloudJobIds = cloudJobs.map(cj => cj.job.id);
-            setSavedJobIds(prev => Array.from(new Set([...prev, ...cloudJobIds])));
+            setSavedJobIds(cloudJobIds);
             
-            setTrackerEntries(prev => {
-              const updated = { ...prev };
-              cloudJobs.forEach(cj => {
-                if (!updated[cj.job.id]) {
-                  updated[cj.job.id] = {
-                    jobId: cj.job.id,
-                    jobTitle: cj.job.jobTitle,
-                    company: cj.job.company,
-                    location: cj.job.location,
-                    salary: cj.job.salary,
-                    matchScore: cj.job.matchScore,
-                    applicationLink: cj.job.applicationLink,
-                    status: (cj.status as ApplicationStatus) || 'saved',
-                    notes: cj.notes || '',
-                    lastUpdated: new Date().toLocaleDateString('en-ZA')
-                  };
-                }
-              });
-              return updated;
+            const updated: Record<string, ApplicationTrackerEntry> = {};
+            cloudJobs.forEach(cj => {
+              updated[cj.job.id] = {
+                jobId: cj.job.id,
+                jobTitle: cj.job.jobTitle,
+                company: cj.job.company,
+                location: cj.job.location,
+                salary: cj.job.salary,
+                matchScore: cj.job.matchScore,
+                applicationLink: cj.job.applicationLink,
+                status: (cj.status as ApplicationStatus) || 'saved',
+                notes: cj.notes || '',
+                lastUpdated: new Date().toLocaleDateString('en-ZA')
+              };
             });
+            setTrackerEntries(updated);
+          } else {
+            // New or empty user account - start with 0 saved jobs and 0 tracked applications
+            setSavedJobIds([]);
+            setTrackerEntries({});
           }
 
           // 3. Fetch saved searches from Firestore
@@ -416,7 +402,14 @@ export default function App() {
           setSyncStatus('synced');
         }
       } else {
+        // Guest user - clear all tracker entries and saved roles
         setSyncStatus('guest');
+        setSavedJobIds([]);
+        setTrackerEntries({});
+        try {
+          localStorage.removeItem('saved_job_ids');
+          localStorage.removeItem('tracked_applications');
+        } catch {}
       }
     });
 
@@ -426,6 +419,12 @@ export default function App() {
   const handleLogout = async () => {
     try {
       await logoutUser();
+      setSavedJobIds([]);
+      setTrackerEntries({});
+      try {
+        localStorage.removeItem('saved_job_ids');
+        localStorage.removeItem('tracked_applications');
+      } catch {}
       triggerTrackerToast('Successfully signed out. Operating in Guest mode.');
     } catch (err: any) {
       console.error(err);
@@ -491,14 +490,17 @@ export default function App() {
     return savedSearches.reduce((acc, s) => acc + (s.hasNewAlert ? (s.newMatchesCount || 1) : 0), 0);
   }, [savedSearches]);
 
-  // Persist tracked applications
+  // Persist tracked applications only for logged in users
   useEffect(() => {
-    try {
-      localStorage.setItem('tracked_applications', JSON.stringify(trackerEntries));
-    } catch (e) {
-      console.error('Failed to save tracked applications', e);
+    if (currentUser) {
+      try {
+        localStorage.setItem(`tracked_applications_${currentUser.uid}`, JSON.stringify(trackerEntries));
+      } catch (e) {
+        console.error('Failed to save tracked applications', e);
+      }
     }
-  }, [trackerEntries]);
+  }, [trackerEntries, currentUser]);
+
   useEffect(() => {
     try {
       localStorage.setItem('candidate_profile', JSON.stringify(profile));
@@ -507,14 +509,16 @@ export default function App() {
     }
   }, [profile]);
 
-  // Persist saved jobs
+  // Persist saved jobs only for logged in users
   useEffect(() => {
-    try {
-      localStorage.setItem('saved_job_ids', JSON.stringify(savedJobIds));
-    } catch (e) {
-      console.error('Failed to save job ids', e);
+    if (currentUser) {
+      try {
+        localStorage.setItem(`saved_job_ids_${currentUser.uid}`, JSON.stringify(savedJobIds));
+      } catch (e) {
+        console.error('Failed to save job ids', e);
+      }
     }
-  }, [savedJobIds]);
+  }, [savedJobIds, currentUser]);
 
   // Persist hidden jobs
   useEffect(() => {
@@ -712,12 +716,16 @@ export default function App() {
   }, []);
 
   const toggleSaveJob = (id: string, jobObj?: JobMatch) => {
+    if (!currentUser) {
+      setShowAuthModal(true);
+      triggerTrackerToast('Sign in or register to save opportunities and track applications.', 'Sign In', () => setShowAuthModal(true));
+      return;
+    }
+
     setSavedJobIds(prev => {
       const isSaved = prev.includes(id);
       if (isSaved) {
-        if (currentUser) {
-          removeJobFromCloud(currentUser.uid, id);
-        }
+        removeJobFromCloud(currentUser.uid, id);
         return prev.filter(jId => jId !== id);
       } else {
         if (jobObj && !trackerEntries[id]) {
@@ -737,10 +745,8 @@ export default function App() {
             ...tPrev,
             [id]: newEntry
           }));
-          if (currentUser) {
-            saveJobToCloud(currentUser.uid, jobObj, 'saved');
-          }
-        } else if (jobObj && currentUser) {
+          saveJobToCloud(currentUser.uid, jobObj, 'saved');
+        } else if (jobObj) {
           saveJobToCloud(currentUser.uid, jobObj, 'saved');
         }
         return [...prev, id];
@@ -753,6 +759,12 @@ export default function App() {
     newStatus: ApplicationStatus, 
     jobData?: Partial<ApplicationTrackerEntry>
   ) => {
+    if (!currentUser) {
+      setShowAuthModal(true);
+      triggerTrackerToast('Sign in to track applications and update stages.', 'Sign In', () => setShowAuthModal(true));
+      return;
+    }
+
     const today = new Date().toLocaleDateString('en-ZA', { day: 'numeric', month: 'short', year: 'numeric' });
     
     setTrackerEntries(prev => {
@@ -774,20 +786,18 @@ export default function App() {
         customAdded: jobData?.customAdded !== undefined ? jobData.customAdded : existing.customAdded || false
       };
 
-      if (currentUser) {
-        saveJobToCloud(currentUser.uid, {
-          id: jobId,
-          jobTitle: updated.jobTitle,
-          company: updated.company,
-          location: updated.location,
-          salary: updated.salary || '',
-          matchScore: updated.matchScore || 85,
-          applicationLink: updated.applicationLink || '',
-          probabilityOfSuccess: 'HIGH',
-          whyMatches: [],
-          keyGaps: []
-        }, newStatus, updated.notes);
-      }
+      saveJobToCloud(currentUser.uid, {
+        id: jobId,
+        jobTitle: updated.jobTitle,
+        company: updated.company,
+        location: updated.location,
+        salary: updated.salary || '',
+        matchScore: updated.matchScore || 85,
+        applicationLink: updated.applicationLink || '',
+        probabilityOfSuccess: 'HIGH',
+        whyMatches: [],
+        keyGaps: []
+      }, newStatus, updated.notes);
 
       return { ...prev, [jobId]: updated };
     });
@@ -813,25 +823,24 @@ export default function App() {
   };
 
   const handleSaveNotes = (jobId: string, notesText: string) => {
+    if (!currentUser) return;
     setTrackerEntries(prev => {
       const existing = prev[jobId];
       if (!existing) return prev;
       const updated = { ...existing, notes: notesText };
 
-      if (currentUser) {
-        saveJobToCloud(currentUser.uid, {
-          id: jobId,
-          jobTitle: updated.jobTitle,
-          company: updated.company,
-          location: updated.location,
-          salary: updated.salary || '',
-          matchScore: updated.matchScore || 85,
-          applicationLink: updated.applicationLink || '',
-          probabilityOfSuccess: 'HIGH',
-          whyMatches: [],
-          keyGaps: []
-        }, updated.status, notesText);
-      }
+      saveJobToCloud(currentUser.uid, {
+        id: jobId,
+        jobTitle: updated.jobTitle,
+        company: updated.company,
+        location: updated.location,
+        salary: updated.salary || '',
+        matchScore: updated.matchScore || 85,
+        applicationLink: updated.applicationLink || '',
+        probabilityOfSuccess: 'HIGH',
+        whyMatches: [],
+        keyGaps: []
+      }, updated.status, notesText);
 
       return {
         ...prev,
@@ -855,6 +864,11 @@ export default function App() {
 
   const handleAddCustomApplication = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) {
+      setShowAuthModal(true);
+      triggerTrackerToast('Sign in to track custom external job applications.', 'Sign In', () => setShowAuthModal(true));
+      return;
+    }
     if (!customJobTitle.trim() || !customCompany.trim()) return;
 
     const jobId = `custom-${Date.now()}`;
@@ -878,6 +892,19 @@ export default function App() {
 
     setTrackerEntries(prev => ({ ...prev, [jobId]: newEntry }));
     setSavedJobIds(prev => [...prev, jobId]);
+    
+    saveJobToCloud(currentUser.uid, {
+      id: jobId,
+      jobTitle: newEntry.jobTitle,
+      company: newEntry.company,
+      location: newEntry.location,
+      salary: newEntry.salary || '',
+      matchScore: 90,
+      applicationLink: newEntry.applicationLink || '',
+      probabilityOfSuccess: 'HIGH',
+      whyMatches: ['External tracked role'],
+      keyGaps: []
+    }, newEntry.status, newEntry.notes);
 
     setCustomJobTitle('');
     setCustomCompany('');
@@ -1614,7 +1641,14 @@ export default function App() {
 
                 <div className="flex items-center gap-3 flex-wrap">
                   <button 
-                    onClick={() => setShowAddCustomModal(true)}
+                    onClick={() => {
+                      if (!currentUser) {
+                        setShowAuthModal(true);
+                        triggerTrackerToast('Sign in to track custom external applications.', 'Sign In', () => setShowAuthModal(true));
+                      } else {
+                        setShowAddCustomModal(true);
+                      }
+                    }}
                     className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-lg shadow-indigo-100 flex items-center gap-2 text-sm active:scale-95"
                   >
                     <Plus className="w-4 h-4" />
@@ -1622,6 +1656,26 @@ export default function App() {
                   </button>
                 </div>
               </header>
+
+              {!currentUser && (
+                <div className="bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-3xl p-6 shadow-md border border-indigo-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <LogIn className="w-5 h-5 text-indigo-400" />
+                      <h4 className="font-bold text-base text-white">Guest Session — Sign in to Track Applications</h4>
+                    </div>
+                    <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
+                      Your application stages, interview dates, and recruiter notes are secured to your account. Sign in or register to start tracking applications in your pipeline.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowAuthModal(true)}
+                    className="bg-indigo-500 hover:bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all whitespace-nowrap self-start md:self-auto flex items-center gap-2"
+                  >
+                    <LogIn className="w-4 h-4" /> Sign In / Sign Up
+                  </button>
+                </div>
+              )}
 
               {/* Pipeline Metric Bar */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
@@ -1860,21 +1914,56 @@ export default function App() {
                 </span>
               </header>
 
+              {!currentUser && (
+                <div className="bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-3xl p-6 shadow-md border border-indigo-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Bookmark className="w-5 h-5 text-indigo-400" />
+                      <h4 className="font-bold text-base text-white">Guest Session — Sign in to Save Roles</h4>
+                    </div>
+                    <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
+                      Saved jobs are tied directly to your account and synced with your cloud database. Sign in or register to bookmark jobs and prepare applications.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowAuthModal(true)}
+                    className="bg-indigo-500 hover:bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all whitespace-nowrap self-start md:self-auto flex items-center gap-2"
+                  >
+                    <LogIn className="w-4 h-4" /> Sign In / Sign Up
+                  </button>
+                </div>
+              )}
+
               {savedJobsList.length === 0 ? (
                 <div className="bg-white border border-slate-200 rounded-3xl p-16 text-center space-y-4 shadow-sm">
                   <div className="bg-indigo-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto text-indigo-600">
                     <Bookmark className="w-8 h-8" />
                   </div>
-                  <h3 className="text-xl font-extrabold text-slate-900">No saved roles yet</h3>
+                  <h3 className="text-xl font-extrabold text-slate-900">
+                    {!currentUser ? 'No saved roles in guest mode' : 'No saved roles yet'}
+                  </h3>
                   <p className="text-slate-500 max-w-md mx-auto text-sm leading-relaxed">
-                    Click "Save Job" on any match in your dashboard to track roles you plan to apply to.
+                    {!currentUser 
+                      ? 'Sign in to bookmark matches from the dashboard and manage your application pipeline across devices.' 
+                      : 'Click "Save Job" on any match in your dashboard to track roles you plan to apply to.'}
                   </p>
-                  <button 
-                    onClick={() => setCurrentView('dashboard')}
-                    className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-md"
-                  >
-                    Browse Identified Opportunities
-                  </button>
+                  <div className="flex items-center justify-center gap-3 flex-wrap">
+                    {!currentUser ? (
+                      <button 
+                        onClick={() => setShowAuthModal(true)}
+                        className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-md flex items-center gap-2"
+                      >
+                        <LogIn className="w-4 h-4" /> Sign In to Save Roles
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={() => setCurrentView('dashboard')}
+                        className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-md"
+                      >
+                        Browse Identified Opportunities
+                      </button>
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-6">
