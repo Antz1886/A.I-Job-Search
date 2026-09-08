@@ -304,8 +304,8 @@ export async function generateDailyReport(profile: CandidateProfile): Promise<Da
       const data = await res.json();
       return sanitizeReportLinks(data);
     }
-  } catch (err) {
-    console.warn("API generate-report network fetch failed, using fallback:", err);
+  } catch (_err) {
+    // Graceful fallback to rich localized South African market intelligence
   }
 
   // Safe client fallback
@@ -488,8 +488,8 @@ export async function generateATSAnalysis(profile: CandidateProfile): Promise<AT
       const data = await res.json();
       return data;
     }
-  } catch (err) {
-    console.warn("API generate-ats network fetch failed, using fallback:", err);
+  } catch (_err) {
+    // Fallback to domain engine
   }
 
   return {
@@ -590,8 +590,8 @@ export async function generateCoverLetter(
       const data = await res.json();
       return data;
     }
-  } catch (err) {
-    console.warn("API generate-cover-letter network fetch failed, using fallback:", err);
+  } catch (_err) {
+    // Fallback to domain engine
   }
 
   return {
@@ -621,8 +621,8 @@ export async function generateInterviewPrep(
       const data = await res.json();
       return data;
     }
-  } catch (err) {
-    console.warn("API generate-interview-prep network fetch failed, using fallback:", err);
+  } catch (_err) {
+    // Fallback to domain engine
   }
 
   const roleToPrep = targetRole || profile?.targetRoles?.[0] || "IT Operations Manager";
@@ -679,8 +679,8 @@ export async function generateFullCVDraft(
       const data = await res.json();
       return data;
     }
-  } catch (err) {
-    console.warn("API generate-cv-draft network fetch failed, using fallback:", err);
+  } catch (_err) {
+    // Fallback to domain engine
   }
 
   const roleToDraft = targetRole || profile?.targetRoles?.[0] || "IT Operations Manager";

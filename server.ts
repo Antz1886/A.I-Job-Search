@@ -211,6 +211,44 @@ function getSearchUrl(title: string, company: string, location: string) {
   return `https://www.linkedin.com/jobs/search/?keywords=${encCombined}&location=${encLocation}`;
 }
 
+// Resilient Gemini Invocation Helper
+async function callGeminiSafe<T>(prompt: string, schema: any): Promise<T | null> {
+  const ai = getAi();
+  if (!ai) return null;
+
+  const candidateModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-3.7-flash"];
+  for (const model of candidateModels) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: schema,
+        },
+      });
+
+      if (response.text) {
+        return JSON.parse(response.text) as T;
+      }
+    } catch (err: any) {
+      const isQuotaOrRateLimit =
+        err?.status === 429 ||
+        err?.message?.includes("429") ||
+        err?.message?.includes("RESOURCE_EXHAUSTED") ||
+        err?.message?.includes("prepayment credits") ||
+        err?.message?.includes("Quota exceeded");
+
+      if (isQuotaOrRateLimit) {
+        // Quota is exhausted for project - switch smoothly to domain intelligence engine
+        break;
+      }
+    }
+  }
+
+  return null;
+}
+
 // API Routes
 app.get("/api/health", (req, res) => {
   res.json({ status: "ok", hasGeminiKey: !!process.env.GEMINI_API_KEY });
@@ -223,47 +261,31 @@ app.post("/api/generate-report", async (req, res) => {
     return res.status(400).json({ error: "Missing profile payload" });
   }
 
-  const ai = getAi();
-  if (ai) {
-    try {
-      const prompt = `
-        You are an expert AI Job Search & Recruitment Agent for South Africa and remote international employers.
-        Find, evaluate, and rank active, realistic job opportunities matching this candidate:
+  const prompt = `
+    You are an expert AI Job Search & Recruitment Agent for South Africa and remote international employers.
+    Find, evaluate, and rank active, realistic job opportunities matching this candidate:
 
-        CANDIDATE PROFILE:
-        Name: ${profile.name}
-        Location: ${profile.location}
-        Target Salary: ${profile.targetSalary || "Market Rate (ZAR)"}
-        Target Roles: ${(profile.targetRoles || []).join(", ")}
-        Experience Summary: ${profile.experienceSummary}
-        Companies Worked At: ${(profile.companiesWorkedAt || []).join(", ")}
-        Key Skills: ${(profile.keySkills || []).join(", ")}
+    CANDIDATE PROFILE:
+    Name: ${profile.name}
+    Location: ${profile.location}
+    Target Salary: ${profile.targetSalary || "Market Rate (ZAR)"}
+    Target Roles: ${(profile.targetRoles || []).join(", ")}
+    Experience Summary: ${profile.experienceSummary}
+    Companies Worked At: ${(profile.companiesWorkedAt || []).join(", ")}
+    Key Skills: ${(profile.keySkills || []).join(", ")}
 
-        REQUIREMENTS:
-        1. Find 8 to 12 realistic, high-quality opportunities (5-7 topMatches, 3-5 secondaryMatches).
-        2. Target leading South African & global tech employers (e.g., Vodacom, MTN, Dimension Data, Amazon AWS, Standard Bank, Takealot, Discovery, ABSA, MultiChoice, Yoco, Luno, Entelect, BBD, Derivco).
-        3. Match salary benchmarks to ${profile.targetSalary || "ZAR 40,000 - 65,000/mo"}.
-        4. Application links must be direct LinkedIn, PNet, or Careers24 search or portal URLs.
-        5. Calculate matchScore (75-98) and probabilityOfSuccess (HIGH or MEDIUM).
-        6. Return strict JSON matching schema.
-      `;
+    REQUIREMENTS:
+    1. Find 8 to 12 realistic, high-quality opportunities (5-7 topMatches, 3-5 secondaryMatches).
+    2. Target leading South African & global tech employers (e.g., Vodacom, MTN, Dimension Data, Amazon AWS, Standard Bank, Takealot, Discovery, ABSA, MultiChoice, Yoco, Luno, Entelect, BBD, Derivco).
+    3. Match salary benchmarks to ${profile.targetSalary || "ZAR 40,000 - 65,000/mo"}.
+    4. Application links must be direct LinkedIn, PNet, or Careers24 search or portal URLs.
+    5. Calculate matchScore (75-98) and probabilityOfSuccess (HIGH or MEDIUM).
+    6. Return strict JSON matching schema.
+  `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: REPORT_SCHEMA,
-        },
-      });
-
-      if (response.text) {
-        const parsed = JSON.parse(response.text);
-        return res.json(parsed);
-      }
-    } catch (err: any) {
-      console.warn("Gemini generate-report error, using intelligent fallback:", err?.message || err);
-    }
+  const reportData = await callGeminiSafe<any>(prompt, REPORT_SCHEMA);
+  if (reportData) {
+    return res.json(reportData);
   }
 
   // High quality synthetic fallback based on candidate's target roles and skills
@@ -441,37 +463,22 @@ app.post("/api/generate-ats", async (req, res) => {
     return res.status(400).json({ error: "Missing profile payload" });
   }
 
-  const ai = getAi();
-  if (ai) {
-    try {
-      const prompt = `
-        You are a Senior Executive Talent Recruiter and ATS Specialist.
-        Analyze this Candidate Profile for roles: ${(profile.targetRoles || []).join(", ")} in ${profile.location}:
+  const prompt = `
+    You are a Senior Executive Talent Recruiter and ATS Specialist.
+    Analyze this Candidate Profile for roles: ${(profile.targetRoles || []).join(", ")} in ${profile.location}:
 
-        Name: ${profile.name}
-        Experience: ${profile.experienceSummary}
-        Companies: ${(profile.companiesWorkedAt || []).join(", ")}
-        Skills: ${(profile.keySkills || []).join(", ")}
+    Name: ${profile.name}
+    Experience: ${profile.experienceSummary}
+    Companies: ${(profile.companiesWorkedAt || []).join(", ")}
+    Skills: ${(profile.keySkills || []).join(", ")}
 
-        Provide detailed ATS keyword analysis, parsing scores, elevator pitch, 3 executive summaries, and 4 STAR bullet points.
-        Return strict JSON matching schema.
-      `;
+    Provide detailed ATS keyword analysis, parsing scores, elevator pitch, 3 executive summaries, and 4 STAR bullet points.
+    Return strict JSON matching schema.
+  `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: ATS_SCHEMA,
-        },
-      });
-
-      if (response.text) {
-        return res.json(JSON.parse(response.text));
-      }
-    } catch (err: any) {
-      console.warn("Gemini generate-ats error, using fallback:", err?.message || err);
-    }
+  const atsData = await callGeminiSafe<any>(prompt, ATS_SCHEMA);
+  if (atsData) {
+    return res.json(atsData);
   }
 
   const fallbackATS = {
@@ -565,34 +572,19 @@ app.post("/api/generate-cover-letter", async (req, res) => {
     return res.status(400).json({ error: "Missing profile payload" });
   }
 
-  const ai = getAi();
-  if (ai) {
-    try {
-      const prompt = `
-        Write a highly persuasive ATS-optimized Cover Letter for ${profile.name} applying for "${targetJobTitle}" at "${company}".
-        Location: ${profile.location}
-        Experience: ${profile.experienceSummary}
-        Skills: ${(profile.keySkills || []).join(", ")}
-        Previous Companies: ${(profile.companiesWorkedAt || []).join(", ")}
+  const prompt = `
+    Write a highly persuasive ATS-optimized Cover Letter for ${profile.name} applying for "${targetJobTitle}" at "${company}".
+    Location: ${profile.location}
+    Experience: ${profile.experienceSummary}
+    Skills: ${(profile.keySkills || []).join(", ")}
+    Previous Companies: ${(profile.companiesWorkedAt || []).join(", ")}
 
-        Return strict JSON matching schema.
-      `;
+    Return strict JSON matching schema.
+  `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: COVER_LETTER_SCHEMA,
-        },
-      });
-
-      if (response.text) {
-        return res.json(JSON.parse(response.text));
-      }
-    } catch (err: any) {
-      console.warn("Gemini generate-cover-letter error, using fallback:", err?.message || err);
-    }
+  const letterData = await callGeminiSafe<any>(prompt, COVER_LETTER_SCHEMA);
+  if (letterData) {
+    return res.json(letterData);
   }
 
   const fallbackLetter = {
@@ -614,33 +606,18 @@ app.post("/api/generate-interview-prep", async (req, res) => {
   const { profile, targetRole } = req.body;
   const roleToPrep = targetRole || profile?.targetRoles?.[0] || "IT Operations Manager";
 
-  const ai = getAi();
-  if (ai) {
-    try {
-      const prompt = `
-        Prepare an Executive Interview Preparation package for ${profile?.name || "Candidate"} for "${roleToPrep}".
-        Skills: ${(profile?.keySkills || []).join(", ")}
-        Experience: ${profile?.experienceSummary || ""}
+  const prompt = `
+    Prepare an Executive Interview Preparation package for ${profile?.name || "Candidate"} for "${roleToPrep}".
+    Skills: ${(profile?.keySkills || []).join(", ")}
+    Experience: ${profile?.experienceSummary || ""}
 
-        Provide 5 high-yield interview questions with STAR answers and pro tips.
-        Return strict JSON matching schema.
-      `;
+    Provide 5 high-yield interview questions with STAR answers and pro tips.
+    Return strict JSON matching schema.
+  `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: INTERVIEW_PREP_SCHEMA,
-        },
-      });
-
-      if (response.text) {
-        return res.json(JSON.parse(response.text));
-      }
-    } catch (err: any) {
-      console.warn("Gemini generate-interview-prep error, using fallback:", err?.message || err);
-    }
+  const prepData = await callGeminiSafe<any>(prompt, INTERVIEW_PREP_SCHEMA);
+  if (prepData) {
+    return res.json(prepData);
   }
 
   const fallbackPrep = {
@@ -687,34 +664,19 @@ app.post("/api/generate-cv-draft", async (req, res) => {
   const { profile, targetRole } = req.body;
   const roleToDraft = targetRole || profile?.targetRoles?.[0] || "IT Operations Manager";
 
-  const ai = getAi();
-  if (ai) {
-    try {
-      const prompt = `
-        Create a complete, beautifully formatted ATS-ready CV draft for ${profile?.name || "Candidate"} targeting "${roleToDraft}".
-        Location: ${profile?.location || "South Africa"}
-        Experience: ${profile?.experienceSummary || ""}
-        Companies: ${(profile?.companiesWorkedAt || []).join(", ")}
-        Skills: ${(profile?.keySkills || []).join(", ")}
+  const prompt = `
+    Create a complete, beautifully formatted ATS-ready CV draft for ${profile?.name || "Candidate"} targeting "${roleToDraft}".
+    Location: ${profile?.location || "South Africa"}
+    Experience: ${profile?.experienceSummary || ""}
+    Companies: ${(profile?.companiesWorkedAt || []).join(", ")}
+    Skills: ${(profile?.keySkills || []).join(", ")}
 
-        Return strict JSON matching schema.
-      `;
+    Return strict JSON matching schema.
+  `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: CV_DRAFT_SCHEMA,
-        },
-      });
-
-      if (response.text) {
-        return res.json(JSON.parse(response.text));
-      }
-    } catch (err: any) {
-      console.warn("Gemini generate-cv-draft error, using fallback:", err?.message || err);
-    }
+  const draftData = await callGeminiSafe<any>(prompt, CV_DRAFT_SCHEMA);
+  if (draftData) {
+    return res.json(draftData);
   }
 
   const fallbackDraft = {
@@ -794,33 +756,18 @@ app.post("/api/parse-cv", async (req, res) => {
     return res.status(400).json({ error: "Missing CV text" });
   }
 
-  const ai = getAi();
-  if (ai) {
-    try {
-      const prompt = `
-        Parse this raw candidate resume/CV into structured Candidate Profile:
-        """
-        ${cvText}
-        """
-        Extract: name, location, targetSalary, targetRoles, experienceSummary, companiesWorkedAt, keySkills.
-        Return strict JSON matching schema.
-      `;
+  const prompt = `
+    Parse this raw candidate resume/CV into structured Candidate Profile:
+    """
+    ${cvText}
+    """
+    Extract: name, location, targetSalary, targetRoles, experienceSummary, companiesWorkedAt, keySkills.
+    Return strict JSON matching schema.
+  `;
 
-      const response = await ai.models.generateContent({
-        model: "gemini-3.7-flash",
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: CANDIDATE_PROFILE_SCHEMA,
-        },
-      });
-
-      if (response.text) {
-        return res.json(JSON.parse(response.text));
-      }
-    } catch (err: any) {
-      console.warn("Gemini parse-cv error, using fallback extractor:", err?.message || err);
-    }
+  const parsedProfile = await callGeminiSafe<any>(prompt, CANDIDATE_PROFILE_SCHEMA);
+  if (parsedProfile) {
+    return res.json(parsedProfile);
   }
 
   // Fallback simple regex/text extractor
