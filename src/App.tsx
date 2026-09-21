@@ -94,6 +94,7 @@ import {
 import type { User as FirebaseUser } from 'firebase/auth';
 import { AuthModal } from './components/AuthModal';
 import { CVParserModal } from './components/CVParserModal';
+import { LandingPage } from './components/LandingPage';
 import { 
   DailyReport, 
   JobMatch, 
@@ -325,6 +326,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signup');
+  const [isPreviewDemo, setIsPreviewDemo] = useState(false);
   const [showCvParserModal, setShowCvParserModal] = useState(false);
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'guest'>('guest');
   const [selectedPresetId, setSelectedPresetId] = useState<string>('it_ops');
@@ -421,11 +424,12 @@ export default function App() {
       await logoutUser();
       setSavedJobIds([]);
       setTrackerEntries({});
+      setIsPreviewDemo(false);
       try {
         localStorage.removeItem('saved_job_ids');
         localStorage.removeItem('tracked_applications');
       } catch {}
-      triggerTrackerToast('Successfully signed out. Operating in Guest mode.');
+      triggerTrackerToast('Successfully signed out.');
     } catch (err: any) {
       console.error(err);
     }
@@ -709,11 +713,8 @@ export default function App() {
     }
   };
 
-  useEffect(() => {
-    if (!report) {
-      runSearch();
-    }
-  }, []);
+  // User intent: Initial state for new users must have 0 entries until they explicitly run search or select a role.
+  // Search is triggered on-demand via the "Run AI Job Search" button or preset selection.
 
   const toggleSaveJob = (id: string, jobObj?: JobMatch) => {
     if (!currentUser) {
@@ -1044,8 +1045,41 @@ export default function App() {
     }));
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-white flex flex-col items-center justify-center space-y-4 font-sans">
+        <div className="w-12 h-12 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin"></div>
+        <p className="text-sm text-neutral-400 font-medium">Initializing career workspace...</p>
+      </div>
+    );
+  }
+
+  // When user is not authenticated and not exploring demo preview, show high-converting Landing Page
+  if (!currentUser && !isPreviewDemo) {
+    return (
+      <>
+        <LandingPage 
+          onOpenAuth={(mode) => {
+            setAuthMode(mode);
+            setShowAuthModal(true);
+          }}
+          onExploreDemo={() => setIsPreviewDemo(true)}
+        />
+        <AuthModal 
+          isOpen={showAuthModal}
+          initialMode={authMode}
+          onClose={() => setShowAuthModal(false)}
+          onSuccess={(user) => {
+            setCurrentUser(user);
+            setShowAuthModal(false);
+          }}
+        />
+      </>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#F8FAFC] text-[#0F172A] font-sans selection:bg-indigo-100">
+    <div className="min-h-screen bg-white text-neutral-900 font-sans selection:bg-amber-100 selection:text-amber-900">
       {/* Toast Banner */}
       <AnimatePresence>
         {exportedToast && (
@@ -1053,9 +1087,9 @@ export default function App() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-bold border border-slate-700"
+            className="fixed top-5 right-5 z-50 bg-neutral-950 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm font-bold border border-amber-500/40"
           >
-            <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+            <CheckCircle2 className="w-5 h-5 text-amber-400" />
             Report Exported Successfully!
           </motion.div>
         )}
@@ -1064,9 +1098,9 @@ export default function App() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-5 right-5 z-50 bg-indigo-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 text-sm font-bold border border-indigo-700"
+            className="fixed top-5 right-5 z-50 bg-neutral-950 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 text-sm font-bold border border-amber-500/40"
           >
-            <BookmarkCheck className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+            <BookmarkCheck className="w-5 h-5 text-amber-400 flex-shrink-0" />
             {savedSearchToast}
           </motion.div>
         )}
@@ -1075,14 +1109,14 @@ export default function App() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed top-5 right-5 z-50 bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 text-sm font-bold border border-slate-700"
+            className="fixed top-5 right-5 z-50 bg-neutral-950 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 text-sm font-bold border border-amber-500/40"
           >
-            <CheckCircle2 className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+            <CheckCircle2 className="w-5 h-5 text-amber-400 flex-shrink-0" />
             <span>{trackerToast.message}</span>
             {trackerToast.actionText && (
               <button 
                 onClick={trackerToast.onAction}
-                className="ml-2 bg-emerald-500 hover:bg-emerald-600 text-slate-950 px-3 py-1 rounded-xl text-xs font-black transition-all shadow-xs flex items-center gap-1"
+                className="ml-2 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-500 hover:to-yellow-600 text-black px-3 py-1 rounded-xl text-xs font-black transition-all shadow-xs flex items-center gap-1"
               >
                 {trackerToast.actionText} <ChevronRight className="w-3 h-3" />
               </button>
@@ -1091,15 +1125,39 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Demo Preview Banner */}
+      {isPreviewDemo && !currentUser && (
+        <div className="bg-neutral-950 text-white px-6 py-2.5 text-xs flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/40 sticky top-0 z-50 shadow-md">
+          <div className="flex items-center gap-2">
+            <span className="bg-amber-500 text-black text-[10px] font-black uppercase px-2 py-0.5 rounded tracking-wider">Demo Mode</span>
+            <span className="text-neutral-200">You are exploring in demo mode with 0 initial pipeline entries. Create an account to activate cloud sync and save your applications.</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => { setAuthMode('signup'); setShowAuthModal(true); }}
+              className="bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-500 hover:to-yellow-600 text-black font-black px-3.5 py-1 rounded-lg text-xs transition-all shadow-xs"
+            >
+              Sign Up Free
+            </button>
+            <button 
+              onClick={() => setIsPreviewDemo(false)}
+              className="text-neutral-400 hover:text-amber-300 text-xs underline underline-offset-2 transition-colors"
+            >
+              Back to Landing Page
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Sidebar */}
-      <nav className="fixed left-0 top-0 h-full w-72 bg-white border-r border-slate-200 p-8 hidden lg:flex flex-col shadow-sm z-40">
+      <nav className="fixed left-0 top-0 h-full w-72 bg-white border-r border-neutral-200 p-8 hidden lg:flex flex-col shadow-sm z-40">
         <div className="flex items-center gap-3 mb-10">
-          <div className="bg-indigo-600 p-2.5 rounded-xl shadow-indigo-200 shadow-lg">
-            <Briefcase className="w-6 h-6 text-white" />
+          <div className="bg-neutral-950 p-2.5 rounded-xl border border-amber-500/40 shadow-sm">
+            <Briefcase className="w-6 h-6 text-amber-400" />
           </div>
           <div>
-            <h1 className="font-extrabold text-xl tracking-tight text-slate-900">Enterprise</h1>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-600 -mt-1">Recruit Agent</p>
+            <h1 className="font-extrabold text-xl tracking-tight text-neutral-950">Enterprise</h1>
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-600 -mt-1">Recruit Agent</p>
           </div>
         </div>
 
@@ -1145,70 +1203,94 @@ export default function App() {
           />
         </div>
 
-        <div className="mt-auto pt-6 border-t border-slate-100 space-y-3">
+        <div className="mt-auto pt-6 border-t border-neutral-100 space-y-3">
           {currentUser ? (
-            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
+            <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-200 space-y-2">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center font-black text-sm shadow-md">
+                <div className="w-9 h-9 rounded-full bg-neutral-950 border border-amber-500/40 text-amber-400 flex items-center justify-center font-black text-sm shadow-md">
                   {currentUser.displayName ? currentUser.displayName.charAt(0) : (currentUser.email ? currentUser.email.charAt(0).toUpperCase() : 'U')}
                 </div>
                 <div className="truncate flex-1">
-                  <p className="font-bold text-xs text-slate-900 truncate">{currentUser.displayName || currentUser.email}</p>
-                  <div className="flex items-center gap-1 text-[10px] font-extrabold text-emerald-600">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <p className="font-bold text-xs text-neutral-950 truncate">{currentUser.displayName || currentUser.email}</p>
+                  <div className="flex items-center gap-1 text-[10px] font-extrabold text-amber-700">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
                     <span>Cloud Connected</span>
                   </div>
                 </div>
               </div>
               <button
                 onClick={handleLogout}
-                className="w-full text-slate-500 hover:text-red-600 hover:bg-red-50 p-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
+                className="w-full text-neutral-500 hover:text-red-600 hover:bg-red-50 p-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5"
               >
                 <LogOut className="w-3.5 h-3.5" /> Sign Out
               </button>
             </div>
           ) : (
-            <div className="bg-indigo-50/70 p-4 rounded-2xl border border-indigo-100 space-y-2.5">
+            <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-200 space-y-2.5">
               <div className="flex items-center gap-2">
-                <CloudOff className="w-4 h-4 text-indigo-600" />
-                <span className="text-xs font-black text-indigo-900">Guest Mode</span>
+                <CloudOff className="w-4 h-4 text-amber-600" />
+                <span className="text-xs font-black text-amber-950">Guest Mode</span>
               </div>
-              <p className="text-[11px] text-slate-600 leading-snug font-medium">
+              <p className="text-[11px] text-neutral-600 leading-snug font-medium">
                 Sign in to sync your profile, saved roles & pipeline across all devices.
               </p>
               <button
-                onClick={() => setShowAuthModal(true)}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-3 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
+                onClick={() => { setAuthMode('signin'); setShowAuthModal(true); }}
+                className="w-full bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 py-2 px-3 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center justify-center gap-1.5"
               >
                 <LogIn className="w-3.5 h-3.5" /> Sign In / Sign Up
               </button>
             </div>
           )}
+
+          {/* The Invariance Group Attribution */}
+          <div className="pt-2 border-t border-neutral-100 text-center">
+            <a 
+              href="https://www.invarianceai.site/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-neutral-500 hover:text-amber-700 transition-colors group"
+            >
+              <span>Built by <strong className="text-neutral-800 group-hover:text-amber-600">The Invariance Group</strong></span>
+              <ExternalLink className="w-3 h-3 text-neutral-400 group-hover:text-amber-600" />
+            </a>
+          </div>
         </div>
       </nav>
 
       {/* Main Content */}
       <main className="lg:ml-72 p-6 md:p-10 max-w-6xl mx-auto space-y-6">
         {/* Global Top Action & Auth Bar */}
-        <div className="bg-white/90 backdrop-blur-md border border-slate-200/90 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="bg-white/95 backdrop-blur-md border border-neutral-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700">
-              <User className="w-3.5 h-3.5 text-indigo-600" />
-              <span>Target: <strong className="text-indigo-900">{profile.targetRoles[0] || 'Candidate'}</strong></span>
+            <div className="flex items-center gap-2 bg-neutral-50 border border-neutral-200 px-3 py-1.5 rounded-xl text-xs font-bold text-neutral-800">
+              <User className="w-3.5 h-3.5 text-amber-600" />
+              <span>Target: <strong className="text-neutral-950">{profile.targetRoles[0] || 'Candidate'}</strong></span>
             </div>
 
             {/* Cloud Status Pill */}
             {currentUser ? (
-              <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded-xl text-xs font-extrabold">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-300 text-amber-900 px-3 py-1.5 rounded-xl text-xs font-extrabold">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
                 <span>Firestore Cloud: Active</span>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5 bg-amber-50 border border-amber-200 text-amber-800 px-3 py-1.5 rounded-xl text-xs font-bold">
-                <CloudOff className="w-3.5 h-3.5 text-amber-600" />
+              <div className="flex items-center gap-1.5 bg-neutral-100 border border-neutral-200 text-neutral-800 px-3 py-1.5 rounded-xl text-xs font-bold">
+                <CloudOff className="w-3.5 h-3.5 text-neutral-500" />
                 <span>Guest Mode (Local)</span>
               </div>
             )}
+
+            {/* Invariance Group Top Link */}
+            <a 
+              href="https://www.invarianceai.site/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hidden sm:inline-flex items-center gap-1.5 bg-neutral-50 hover:bg-amber-50 border border-neutral-200 hover:border-amber-300 px-3 py-1.5 rounded-xl text-xs font-bold text-neutral-700 hover:text-amber-800 transition-all"
+            >
+              <span>Built by <strong>The Invariance Group</strong></span>
+              <ExternalLink className="w-3 h-3 text-neutral-400" />
+            </a>
           </div>
 
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -1216,7 +1298,7 @@ export default function App() {
             <select
               value={selectedPresetId}
               onChange={(e) => handleSelectPreset(e.target.value)}
-              className="bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold px-3 py-2 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+              className="bg-neutral-50 border border-neutral-200 text-neutral-800 text-xs font-bold px-3 py-2 rounded-xl outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 cursor-pointer"
             >
               <option value="" disabled>Switch Career Preset</option>
               {CAREER_PRESETS.map(p => (
@@ -1227,10 +1309,10 @@ export default function App() {
             {/* Resume Parser Button */}
             <button
               onClick={() => setShowCvParserModal(true)}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-200"
+              className="bg-neutral-100 hover:bg-neutral-200 text-neutral-900 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-neutral-200"
               title="Parse resume plain text into candidate parameters"
             >
-              <Wand2 className="w-3.5 h-3.5 text-indigo-600" />
+              <Wand2 className="w-3.5 h-3.5 text-amber-600" />
               Parse My CV
             </button>
 
@@ -1238,14 +1320,14 @@ export default function App() {
             {currentUser ? (
               <button
                 onClick={handleLogout}
-                className="text-slate-600 hover:text-red-600 px-3 py-2 rounded-xl text-xs font-bold transition-all hover:bg-slate-100 flex items-center gap-1.5"
+                className="text-neutral-600 hover:text-red-600 px-3 py-2 rounded-xl text-xs font-bold transition-all hover:bg-neutral-100 flex items-center gap-1.5"
               >
                 <LogOut className="w-3.5 h-3.5" /> Sign Out
               </button>
             ) : (
               <button
                 onClick={() => setShowAuthModal(true)}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
               >
                 <LogIn className="w-3.5 h-3.5" /> Sign In / Cloud Sign Up
               </button>
@@ -1265,9 +1347,9 @@ export default function App() {
             >
               <header className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                 <div>
-                  <h2 className="text-4xl font-black tracking-tight text-slate-900">Recruitment Dashboard</h2>
-                  <p className="text-slate-500 mt-2 font-medium flex items-center gap-2 text-sm">
-                    <RefreshCw className={`w-4 h-4 text-indigo-600 ${loading ? 'animate-spin' : ''}`} />
+                  <h2 className="text-4xl font-black tracking-tight text-neutral-950">Recruitment Dashboard</h2>
+                  <p className="text-neutral-500 mt-2 font-medium flex items-center gap-2 text-sm">
+                    <RefreshCw className={`w-4 h-4 text-amber-600 ${loading ? 'animate-spin' : ''}`} />
                     {lastUpdated ? `Agent synchronized: ${lastUpdated}` : 'Initializing agent search...'}
                   </p>
                 </div>
@@ -1275,7 +1357,7 @@ export default function App() {
                   <button 
                     onClick={runSearch}
                     disabled={loading}
-                    className="flex items-center justify-center gap-2 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 text-slate-700 px-5 py-3 rounded-xl font-bold transition-all disabled:opacity-50 shadow-sm text-sm"
+                    className="flex items-center justify-center gap-2 bg-white border border-neutral-200 hover:border-amber-400 hover:text-amber-700 text-neutral-800 px-5 py-3 rounded-xl font-bold transition-all disabled:opacity-50 shadow-sm text-sm"
                   >
                     {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                     Sync Data
@@ -1283,7 +1365,7 @@ export default function App() {
                   <button 
                     onClick={handleExportReport}
                     disabled={!report}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-lg shadow-indigo-100 flex items-center gap-2 text-sm disabled:opacity-50"
+                    className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-5 py-3 rounded-xl font-bold transition-all shadow-md flex items-center gap-2 text-sm disabled:opacity-50"
                   >
                     <Download className="w-4 h-4" />
                     Export Report
@@ -1306,12 +1388,65 @@ export default function App() {
               {loading && !report && (
                 <div className="flex flex-col items-center justify-center py-32 space-y-6">
                   <div className="relative">
-                    <div className="w-20 h-20 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
-                    <Search className="w-8 h-8 text-indigo-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+                    <div className="w-20 h-20 border-4 border-amber-100 border-t-amber-500 rounded-full animate-spin"></div>
+                    <Search className="w-8 h-8 text-amber-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                   </div>
                   <div className="text-center space-y-1">
-                    <p className="text-xl font-extrabold text-slate-900">Scanning South Africa Tech Market</p>
-                    <p className="text-sm text-slate-500">Aggregating LinkedIn, PNet, Careers24, and Indeed listings...</p>
+                    <p className="text-xl font-extrabold text-neutral-950">Scanning South Africa Tech Market</p>
+                    <p className="text-sm text-neutral-500">Aggregating LinkedIn, PNet, Careers24, and Indeed listings...</p>
+                  </div>
+                </div>
+              )}
+
+              {!report && !loading && (
+                <div className="bg-white border border-neutral-200 rounded-3xl p-10 text-center shadow-sm space-y-6 max-w-3xl mx-auto my-6">
+                  <div className="w-16 h-16 rounded-3xl bg-amber-50 border border-amber-300 flex items-center justify-center text-amber-700 mx-auto shadow-xs">
+                    <Sparkles className="w-8 h-8" />
+                  </div>
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-amber-800 bg-amber-50 px-3 py-1 rounded-full border border-amber-300">
+                      New Account Initialized • 0 Pipeline Entries
+                    </span>
+                    <h3 className="text-2xl font-black text-neutral-950 tracking-tight">
+                      {currentUser?.displayName ? `Welcome, ${currentUser.displayName}!` : 'Welcome to Your Career Agent!'}
+                    </h3>
+                    <p className="text-sm text-neutral-600 max-w-lg mx-auto leading-relaxed">
+                      Your personal workspace has been initialized with 0 entries. Click <strong>Run AI Job Search</strong> to scan and rank real-time opportunities tailored to your profile, or import your resume.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                    <button
+                      onClick={runSearch}
+                      className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 font-black text-xs px-6 py-3.5 rounded-xl shadow-lg transition-all flex items-center gap-2 active:scale-95"
+                    >
+                      <Search className="w-4 h-4" />
+                      Run AI Job Search (1-Click)
+                    </button>
+                    <button
+                      onClick={() => setShowCvParserModal(true)}
+                      className="bg-neutral-100 hover:bg-neutral-200 text-neutral-900 font-bold text-xs px-5 py-3.5 rounded-xl border border-neutral-200 transition-all flex items-center gap-2"
+                    >
+                      <Wand2 className="w-4 h-4 text-amber-600" />
+                      Parse My CV
+                    </button>
+                  </div>
+
+                  <div className="pt-6 border-t border-neutral-100">
+                    <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider mb-3">
+                      Or select a career role preset:
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center gap-2">
+                      {CAREER_PRESETS.map(p => (
+                        <button
+                          key={p.id}
+                          onClick={() => handleSelectPreset(p.id)}
+                          className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-neutral-50 hover:bg-amber-50 text-neutral-700 hover:text-amber-800 border border-neutral-200 hover:border-amber-300 transition-all"
+                        >
+                          {p.title || p.name}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1337,36 +1472,36 @@ export default function App() {
                     <StatCard 
                       label="Strategic Matches" 
                       value={summaryCounts.medium} 
-                      icon={<TrendingUp className="w-6 h-6 text-indigo-600" />}
+                      icon={<TrendingUp className="w-6 h-6 text-amber-600" />}
                       active={filter === 'MEDIUM'}
                       onClick={() => setFilter('MEDIUM')}
                     />
                   </div>
 
                   {/* APPLICATION TRACKER DASHBOARD SECTION */}
-                  <section className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm space-y-6">
+                  <section className="bg-white border border-neutral-200 rounded-3xl p-8 shadow-sm space-y-6">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div>
-                        <h3 className="text-xl font-bold text-slate-900 flex items-center gap-3">
-                          <div className="bg-indigo-50 p-2.5 rounded-2xl border border-indigo-100">
-                            <ListChecks className="w-5 h-5 text-indigo-600" />
+                        <h3 className="text-xl font-bold text-neutral-950 flex items-center gap-3">
+                          <div className="bg-amber-50 p-2.5 rounded-2xl border border-amber-200">
+                            <ListChecks className="w-5 h-5 text-amber-600" />
                           </div>
                           Application Tracker Pipeline
                         </h3>
-                        <p className="text-slate-500 text-xs mt-1">Real-time status tracking for saved positions and external job applications.</p>
+                        <p className="text-neutral-500 text-xs mt-1">Real-time status tracking for saved positions and external job applications.</p>
                       </div>
                       
                       <div className="flex items-center gap-3">
                         <button 
                           onClick={() => setShowAddCustomModal(true)}
-                          className="bg-slate-100 hover:bg-slate-200 text-slate-800 px-4 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2"
+                          className="bg-neutral-100 hover:bg-neutral-200 text-neutral-800 px-4 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2"
                         >
-                          <Plus className="w-4 h-4 text-indigo-600" />
+                          <Plus className="w-4 h-4 text-amber-600" />
                           Track External Job
                         </button>
                         <button 
                           onClick={() => setCurrentView('tracker')}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 shadow-md"
+                          className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 shadow-md"
                         >
                           Full Tracker Board <ChevronRight className="w-4 h-4" />
                         </button>
@@ -1377,10 +1512,10 @@ export default function App() {
                     <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                       <div 
                         onClick={() => { setTrackerFilter('saved'); setCurrentView('tracker'); }}
-                        className="bg-slate-50 hover:bg-slate-100 border border-slate-200 p-4 rounded-2xl cursor-pointer transition-all space-y-1 group"
+                        className="bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 p-4 rounded-2xl cursor-pointer transition-all space-y-1 group"
                       >
-                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider block">📌 Saved</span>
-                        <p className="text-2xl font-black text-slate-900 group-hover:text-indigo-600">{pipelineCounts.saved}</p>
+                        <span className="text-[10px] font-black uppercase text-neutral-400 tracking-wider block">📌 Saved</span>
+                        <p className="text-2xl font-black text-neutral-900 group-hover:text-amber-600">{pipelineCounts.saved}</p>
                       </div>
                       <div 
                         onClick={() => { setTrackerFilter('applied'); setCurrentView('tracker'); }}
@@ -1414,42 +1549,42 @@ export default function App() {
                   </section>
 
                   {/* Recommended Actions */}
-                  <section className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm">
+                  <section className="bg-white border border-neutral-200 rounded-3xl p-8 shadow-sm">
                     <div className="flex items-center justify-between mb-8">
-                      <h3 className="text-xl font-bold flex items-center gap-3">
-                        <div className="bg-indigo-50 p-2 rounded-lg">
-                          <Target className="w-6 h-6 text-indigo-600" />
+                      <h3 className="text-xl font-bold flex items-center gap-3 text-neutral-950">
+                        <div className="bg-amber-50 p-2 rounded-xl border border-amber-200 text-amber-700">
+                          <Target className="w-6 h-6" />
                         </div>
                         Strategic AI Recommendations
                       </h3>
-                      <span className="text-xs font-bold text-slate-400 uppercase tracking-widest bg-slate-100 px-3 py-1.5 rounded-full">
+                      <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest bg-neutral-100 px-3 py-1.5 rounded-full border border-neutral-200">
                         AI Agent Analysis
                       </span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                       <div className="space-y-4">
-                        <h4 className="font-bold text-slate-800 flex items-center gap-2 text-xs uppercase tracking-wider">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                        <h4 className="font-bold text-neutral-800 flex items-center gap-2 text-xs uppercase tracking-wider">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                           Priority Application Pipeline
                         </h4>
                         <div className="space-y-3">
                           {report.recommendedActions.immediateApplications.map((action, i) => (
-                            <div key={i} className="flex items-start gap-3 p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl text-sm text-emerald-900 font-medium leading-relaxed">
-                              <ChevronRight className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-600" />
+                            <div key={i} className="flex items-start gap-3 p-4 bg-emerald-50/60 border border-emerald-200/70 rounded-xl text-sm text-emerald-950 font-medium leading-relaxed">
+                              <ChevronRight className="w-4 h-4 mt-0.5 flex-shrink-0 text-emerald-700" />
                               {action}
                             </div>
                           ))}
                         </div>
                       </div>
                       <div className="space-y-4">
-                        <h4 className="font-bold text-slate-800 flex items-center gap-2 text-xs uppercase tracking-wider">
-                          <FileText className="w-4 h-4 text-indigo-500" />
+                        <h4 className="font-bold text-neutral-800 flex items-center gap-2 text-xs uppercase tracking-wider">
+                          <FileText className="w-4 h-4 text-amber-600" />
                           CV Optimization Protocol
                         </h4>
                         <div className="space-y-3">
                           {report.recommendedActions.cvTweaks.map((tweak, i) => (
-                            <div key={i} className="flex items-start gap-3 p-4 bg-indigo-50/50 border border-indigo-100 rounded-xl text-sm text-indigo-900 font-medium leading-relaxed">
-                              <Zap className="w-4 h-4 mt-0.5 flex-shrink-0 text-indigo-500" />
+                            <div key={i} className="flex items-start gap-3 p-4 bg-neutral-50 border border-neutral-200 rounded-xl text-sm text-neutral-900 font-medium leading-relaxed">
+                              <Zap className="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" />
                               {tweak}
                             </div>
                           ))}
@@ -1463,22 +1598,22 @@ export default function App() {
                     <motion.div 
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-gradient-to-r from-amber-500 via-indigo-600 to-indigo-700 text-white p-5 rounded-3xl shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4"
+                      className="bg-neutral-950 text-white p-5 rounded-3xl shadow-md border border-amber-500/40 flex flex-col md:flex-row md:items-center justify-between gap-4"
                     >
                       <div className="flex items-center gap-3.5">
-                        <div className="bg-white/20 p-2.5 rounded-2xl backdrop-blur-md">
-                          <BellRing className="w-6 h-6 text-yellow-200 animate-bounce" />
+                        <div className="bg-white/10 p-2.5 rounded-2xl backdrop-blur-md border border-amber-400/30">
+                          <BellRing className="w-6 h-6 text-amber-300 animate-bounce" />
                         </div>
                         <div>
-                          <h4 className="font-extrabold text-base tracking-tight">New High-Probability Opportunities Detected!</h4>
-                          <p className="text-xs text-white/90 font-medium mt-0.5">
+                          <h4 className="font-extrabold text-base tracking-tight text-white">New High-Probability Opportunities Detected!</h4>
+                          <p className="text-xs text-neutral-300 font-medium mt-0.5">
                             {totalNewAlerts} new high-match position(s) found matching your saved search criteria during the last sync.
                           </p>
                         </div>
                       </div>
                       <button 
                         onClick={() => setShowSavedSearchesModal(true)}
-                        className="bg-white text-slate-900 px-5 py-2.5 rounded-xl text-xs font-black hover:bg-slate-100 transition-all shadow-md flex items-center gap-2 flex-shrink-0"
+                        className="bg-white text-neutral-950 px-5 py-2.5 rounded-xl text-xs font-black hover:bg-amber-50 transition-all shadow-md flex items-center gap-2 flex-shrink-0"
                       >
                         View Alerts & Apply Filters <ChevronRight className="w-4 h-4" />
                       </button>
@@ -1487,20 +1622,20 @@ export default function App() {
 
                   {/* Search and Filters Bar */}
                   <div className="space-y-6">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-neutral-200 shadow-sm">
                       <div className="relative flex-1">
-                        <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
+                        <Search className="w-5 h-5 text-neutral-400 absolute left-4 top-1/2 -translate-y-1/2" />
                         <input 
                           type="text" 
                           placeholder="Search job title, company, or key skill..."
-                          className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
+                          className="w-full pl-12 pr-4 py-3 bg-neutral-50 border border-neutral-200 rounded-xl text-sm font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all outline-none"
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                         />
                         {searchQuery && (
                           <button 
                             onClick={() => setSearchQuery('')}
-                            className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
                           >
                             <X className="w-4 h-4" />
                           </button>
@@ -1508,22 +1643,22 @@ export default function App() {
                       </div>
 
                       <div className="flex items-center gap-3 flex-wrap">
-                        <div className="flex items-center bg-slate-100 p-1 rounded-xl">
+                        <div className="flex items-center bg-neutral-100 p-1 rounded-xl border border-neutral-200">
                           <button 
                             onClick={() => setFilter('ALL')}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === 'ALL' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === 'ALL' ? 'bg-neutral-950 text-amber-400 shadow-xs' : 'text-neutral-600 hover:text-neutral-950'}`}
                           >
                             All ({allJobs.length})
                           </button>
                           <button 
                             onClick={() => setFilter('HIGH')}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === 'HIGH' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === 'HIGH' ? 'bg-neutral-950 text-amber-400 shadow-xs' : 'text-neutral-600 hover:text-neutral-950'}`}
                           >
                             High ({summaryCounts.high})
                           </button>
                           <button 
                             onClick={() => setFilter('MEDIUM')}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === 'MEDIUM' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-900'}`}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${filter === 'MEDIUM' ? 'bg-neutral-950 text-amber-400 shadow-xs' : 'text-neutral-600 hover:text-neutral-950'}`}
                           >
                             Medium ({summaryCounts.medium})
                           </button>
@@ -1532,23 +1667,23 @@ export default function App() {
                         {/* Save Search Button */}
                         <button 
                           onClick={handleOpenSaveSearchModal}
-                          className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-all shadow-xs"
+                          className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100 transition-all shadow-xs"
                           title="Save active search criteria to automatically monitor new matches on sync"
                         >
-                          <BookmarkPlus className="w-4 h-4 text-indigo-600" />
+                          <BookmarkPlus className="w-4 h-4 text-amber-700" />
                           Save Search
                         </button>
 
                         {/* Saved Searches Drawer Trigger */}
                         <button 
                           onClick={() => setShowSavedSearchesModal(true)}
-                          className="relative flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-slate-100 text-slate-800 hover:bg-slate-200 transition-all"
+                          className="relative flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-bold bg-neutral-100 text-neutral-800 hover:bg-neutral-200 border border-neutral-200 transition-all"
                           title="View and manage saved search configurations"
                         >
-                          <Bookmark className="w-4 h-4 text-slate-600" />
+                          <Bookmark className="w-4 h-4 text-neutral-600" />
                           Saved ({savedSearches.length})
                           {totalNewAlerts > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
+                            <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center border-2 border-white shadow-sm animate-pulse">
                               {totalNewAlerts}
                             </span>
                           )}
@@ -1557,7 +1692,7 @@ export default function App() {
                         {hiddenJobIds.length > 0 && (
                           <button 
                             onClick={() => setShowHidden(!showHidden)}
-                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all ${showHidden ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+                            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-all ${showHidden ? 'bg-amber-50 text-amber-900 border-amber-300' : 'bg-neutral-50 text-neutral-600 border-neutral-200 hover:bg-neutral-100'}`}
                           >
                             <EyeOff className="w-3.5 h-3.5" />
                             {showHidden ? 'Hide Filtered' : `Hidden (${hiddenJobIds.length})`}
@@ -1569,12 +1704,12 @@ export default function App() {
                     {/* Job Listings */}
                     <div className="space-y-6">
                       {filteredJobs.length === 0 ? (
-                        <div className="bg-white border border-slate-200 rounded-3xl p-16 text-center space-y-4 shadow-sm">
-                          <div className="bg-slate-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto text-slate-400">
+                        <div className="bg-white border border-neutral-200 rounded-3xl p-16 text-center space-y-4 shadow-sm">
+                          <div className="bg-neutral-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto text-neutral-400">
                             <Search className="w-8 h-8" />
                           </div>
-                          <h4 className="text-lg font-bold text-slate-800">No opportunities match current criteria</h4>
-                          <p className="text-sm text-slate-500 max-w-md mx-auto">
+                          <h4 className="text-lg font-bold text-neutral-900">No opportunities match current criteria</h4>
+                          <p className="text-sm text-neutral-500 max-w-md mx-auto">
                             Try broadening your search query or reset filters to view all available positions.
                           </p>
                           <button 
@@ -1583,7 +1718,7 @@ export default function App() {
                               setSearchQuery('');
                               setShowHidden(false);
                             }}
-                            className="bg-indigo-50 text-indigo-600 hover:bg-indigo-100 px-5 py-2.5 rounded-xl font-bold text-xs transition-all"
+                            className="bg-neutral-950 text-amber-400 hover:bg-black px-5 py-2.5 rounded-xl font-bold text-xs border border-amber-500/40 transition-all shadow-xs"
                           >
                             Reset All Filters
                           </button>
@@ -1631,10 +1766,10 @@ export default function App() {
             >
               <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
-                  <h2 className="text-4xl font-black tracking-tight text-slate-900 flex items-center gap-3">
+                  <h2 className="text-4xl font-black tracking-tight text-neutral-950 flex items-center gap-3">
                     Application Tracker & Pipeline
                   </h2>
-                  <p className="text-slate-500 mt-2 font-medium text-sm">
+                  <p className="text-neutral-500 mt-2 font-medium text-sm">
                     Manage application stages (Saved, Applied, Interviewing, Offer, Rejected), record dates, and track interview progress.
                   </p>
                 </div>
@@ -1649,7 +1784,7 @@ export default function App() {
                         setShowAddCustomModal(true);
                       }
                     }}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-3 rounded-xl font-bold transition-all shadow-lg shadow-indigo-100 flex items-center gap-2 text-sm active:scale-95"
+                    className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-5 py-3 rounded-xl font-bold transition-all shadow-md flex items-center gap-2 text-sm active:scale-95"
                   >
                     <Plus className="w-4 h-4" />
                     Track External Job
@@ -1658,19 +1793,19 @@ export default function App() {
               </header>
 
               {!currentUser && (
-                <div className="bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-3xl p-6 shadow-md border border-indigo-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="bg-neutral-950 text-white rounded-3xl p-6 shadow-md border border-amber-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <LogIn className="w-5 h-5 text-indigo-400" />
+                      <LogIn className="w-5 h-5 text-amber-400" />
                       <h4 className="font-bold text-base text-white">Guest Session — Sign in to Track Applications</h4>
                     </div>
-                    <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
+                    <p className="text-xs text-neutral-300 max-w-xl leading-relaxed">
                       Your application stages, interview dates, and recruiter notes are secured to your account. Sign in or register to start tracking applications in your pipeline.
                     </p>
                   </div>
                   <button
                     onClick={() => setShowAuthModal(true)}
-                    className="bg-indigo-500 hover:bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all whitespace-nowrap self-start md:self-auto flex items-center gap-2"
+                    className="bg-amber-500 hover:bg-amber-600 text-neutral-950 px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all whitespace-nowrap self-start md:self-auto flex items-center gap-2"
                   >
                     <LogIn className="w-4 h-4" /> Sign In / Sign Up
                   </button>
@@ -1679,30 +1814,30 @@ export default function App() {
 
               {/* Pipeline Metric Bar */}
               <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm space-y-1">
-                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Total Tracked</span>
-                  <p className="text-2xl font-black text-slate-900">{pipelineCounts.total}</p>
+                <div className="bg-white border border-neutral-200 p-5 rounded-2xl shadow-sm space-y-1">
+                  <span className="text-[10px] font-black uppercase text-neutral-400 tracking-wider">Total Tracked</span>
+                  <p className="text-2xl font-black text-neutral-950">{pipelineCounts.total}</p>
                 </div>
-                <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm space-y-1">
-                  <span className="text-[10px] font-black uppercase text-slate-400 tracking-wider">📌 Saved / Backlog</span>
-                  <p className="text-2xl font-black text-slate-900">{pipelineCounts.saved}</p>
+                <div className="bg-white border border-neutral-200 p-5 rounded-2xl shadow-sm space-y-1">
+                  <span className="text-[10px] font-black uppercase text-neutral-400 tracking-wider">📌 Saved / Backlog</span>
+                  <p className="text-2xl font-black text-neutral-950">{pipelineCounts.saved}</p>
                 </div>
-                <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm space-y-1">
-                  <span className="text-[10px] font-black uppercase text-blue-600 tracking-wider">📩 Applied</span>
-                  <p className="text-2xl font-black text-blue-900">{pipelineCounts.applied}</p>
+                <div className="bg-white border border-neutral-200 p-5 rounded-2xl shadow-sm space-y-1">
+                  <span className="text-[10px] font-black uppercase text-amber-700 tracking-wider">📩 Applied</span>
+                  <p className="text-2xl font-black text-amber-900">{pipelineCounts.applied}</p>
                 </div>
-                <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm space-y-1">
-                  <span className="text-[10px] font-black uppercase text-amber-600 tracking-wider">🎙️ Interviewing</span>
-                  <p className="text-2xl font-black text-amber-900">{pipelineCounts.interviewing}</p>
+                <div className="bg-white border border-neutral-200 p-5 rounded-2xl shadow-sm space-y-1">
+                  <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider">🎙️ Interviewing</span>
+                  <p className="text-2xl font-black text-amber-950">{pipelineCounts.interviewing}</p>
                 </div>
-                <div className="bg-white border border-slate-200 p-5 rounded-2xl shadow-sm space-y-1">
-                  <span className="text-[10px] font-black uppercase text-emerald-600 tracking-wider">🎉 Offer Received</span>
-                  <p className="text-2xl font-black text-emerald-900">{pipelineCounts.offer}</p>
+                <div className="bg-white border border-neutral-200 p-5 rounded-2xl shadow-sm space-y-1">
+                  <span className="text-[10px] font-black uppercase text-neutral-900 tracking-wider">🎉 Offer Received</span>
+                  <p className="text-2xl font-black text-neutral-950">{pipelineCounts.offer}</p>
                 </div>
               </div>
 
               {/* Filter Tabs & Layout Controls */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-neutral-200 shadow-sm">
                 <div className="flex items-center gap-2 flex-wrap">
                   {(['ALL', 'saved', 'applied', 'interviewing', 'offer', 'rejected'] as const).map(st => (
                     <button 
@@ -1710,8 +1845,8 @@ export default function App() {
                       onClick={() => setTrackerFilter(st)}
                       className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
                         trackerFilter === st 
-                          ? 'bg-indigo-600 text-white shadow-sm' 
-                          : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+                          ? 'bg-neutral-950 text-amber-400 border border-amber-500/40 shadow-xs' 
+                          : 'bg-neutral-50 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 border border-neutral-200'
                       }`}
                     >
                       {st === 'ALL' ? 'All Roles' : st.charAt(0).toUpperCase() + st.slice(1)}
@@ -1720,11 +1855,11 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-slate-400">Layout:</span>
+                  <span className="text-xs font-bold text-neutral-400">Layout:</span>
                   <button 
                     onClick={() => setTrackerLayout('kanban')}
                     className={`p-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                      trackerLayout === 'kanban' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'text-slate-500 hover:bg-slate-100'
+                      trackerLayout === 'kanban' ? 'bg-amber-50 text-amber-900 border border-amber-300 font-extrabold' : 'text-neutral-500 hover:bg-neutral-100'
                     }`}
                   >
                     <Layers className="w-4 h-4" /> Board
@@ -1732,7 +1867,7 @@ export default function App() {
                   <button 
                     onClick={() => setTrackerLayout('list')}
                     className={`p-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
-                      trackerLayout === 'list' ? 'bg-indigo-50 text-indigo-700 border border-indigo-200' : 'text-slate-500 hover:bg-slate-100'
+                      trackerLayout === 'list' ? 'bg-amber-50 text-amber-900 border border-amber-300 font-extrabold' : 'text-neutral-500 hover:bg-neutral-100'
                     }`}
                   >
                     <ListChecks className="w-4 h-4" /> List
@@ -1798,98 +1933,126 @@ export default function App() {
               ) : (
                 /* STRUCTURED LIST VIEW */
                 <div className="space-y-4">
-                  {allTrackedList
-                    .filter(t => trackerFilter === 'ALL' || t.status === trackerFilter)
-                    .map(entry => (
-                      <div key={entry.jobId} className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all space-y-4">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-3 flex-wrap">
-                              <h4 className="text-xl font-black text-slate-900">{entry.jobTitle}</h4>
-                              {entry.matchScore && (
-                                <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full">
-                                  {entry.matchScore}% Match
-                                </span>
-                              )}
-                              {entry.customAdded && (
-                                <span className="text-[10px] font-black uppercase tracking-wider bg-purple-100 text-purple-800 px-2.5 py-1 rounded-full">
-                                  Custom Added
-                                </span>
-                              )}
+                  {allTrackedList.length === 0 ? (
+                    <div className="bg-white border border-neutral-200 rounded-3xl p-12 text-center space-y-4 shadow-sm">
+                      <div className="w-14 h-14 bg-amber-50 text-amber-700 rounded-2xl flex items-center justify-center mx-auto border border-amber-300">
+                        <ListChecks className="w-7 h-7" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-lg font-extrabold text-neutral-950">Your Application Pipeline is Empty (0 Entries)</h4>
+                        <p className="text-xs text-neutral-500 max-w-md mx-auto leading-relaxed">
+                          Save positions from the Job Dashboard to organize them here, or click "Track External Job" to record applications submitted outside the platform.
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-center gap-3 pt-2">
+                        <button 
+                          onClick={() => setCurrentView('dashboard')}
+                          className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-5 py-2.5 rounded-xl font-bold text-xs transition-all shadow-md"
+                        >
+                          Discover Matching Jobs
+                        </button>
+                        <button 
+                          onClick={() => setShowAddCustomModal(true)}
+                          className="bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-200 px-5 py-2.5 rounded-xl font-bold text-xs transition-all"
+                        >
+                          + Track External Job
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    allTrackedList
+                      .filter(t => trackerFilter === 'ALL' || t.status === trackerFilter)
+                      .map(entry => (
+                        <div key={entry.jobId} className="bg-white border border-neutral-200 p-6 rounded-3xl shadow-sm hover:shadow-md transition-all space-y-4">
+                          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <h4 className="text-xl font-black text-neutral-950">{entry.jobTitle}</h4>
+                                {entry.matchScore && (
+                                  <span className="text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-900 border border-amber-300 px-2.5 py-1 rounded-full">
+                                    {entry.matchScore}% Match
+                                  </span>
+                                )}
+                                {entry.customAdded && (
+                                  <span className="text-[10px] font-black uppercase tracking-wider bg-neutral-100 text-neutral-800 border border-neutral-300 px-2.5 py-1 rounded-full">
+                                    Custom Added
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-4 text-xs font-bold text-neutral-500 flex-wrap">
+                                <span className="flex items-center gap-1 text-neutral-700"><Briefcase className="w-3.5 h-3.5 text-neutral-400" /> {entry.company}</span>
+                                <span className="flex items-center gap-1 text-neutral-700"><MapPin className="w-3.5 h-3.5 text-neutral-400" /> {entry.location}</span>
+                                {entry.salary && <span className="flex items-center gap-1 text-amber-800 font-bold"><DollarSign className="w-3.5 h-3.5" /> {entry.salary}</span>}
+                              </div>
                             </div>
-                            <div className="flex items-center gap-4 text-xs font-bold text-slate-500 flex-wrap">
-                              <span className="flex items-center gap-1"><Briefcase className="w-3.5 h-3.5" /> {entry.company}</span>
-                              <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" /> {entry.location}</span>
-                              {entry.salary && <span className="flex items-center gap-1 text-indigo-600"><DollarSign className="w-3.5 h-3.5" /> {entry.salary}</span>}
+
+                            <div className="flex items-center gap-3">
+                              <select 
+                                value={entry.status}
+                                onChange={(e) => handleUpdateJobStatus(entry.jobId, e.target.value as ApplicationStatus)}
+                                className={`px-4 py-2 rounded-xl text-xs font-bold outline-none border cursor-pointer ${
+                                  entry.status === 'offer' ? 'bg-neutral-950 text-amber-400 border-neutral-800' :
+                                  entry.status === 'interviewing' ? 'bg-amber-50 text-amber-900 border-amber-300' :
+                                  entry.status === 'applied' ? 'bg-amber-100/60 text-amber-950 border-amber-400' :
+                                  entry.status === 'rejected' ? 'bg-red-50 text-red-800 border-red-300' :
+                                  'bg-neutral-50 text-neutral-700 border-neutral-300'
+                                }`}
+                              >
+                                <option value="saved">📌 Saved</option>
+                                <option value="applied">📩 Applied</option>
+                                <option value="interviewing">🎙️ Interviewing</option>
+                                <option value="offer">🎉 Offer Received</option>
+                                <option value="rejected">❌ Rejected</option>
+                              </select>
+
+                              {entry.applicationLink && (
+                                <a 
+                                  href={entry.applicationLink} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="p-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl transition-all border border-neutral-200"
+                                  title="Open Job Posting"
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </a>
+                              )}
+
+                              <button 
+                                onClick={() => handleDeleteTrackedJob(entry.jobId)}
+                                className="p-2.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
+                                title="Delete Entry"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-3">
-                            <select 
-                              value={entry.status}
-                              onChange={(e) => handleUpdateJobStatus(entry.jobId, e.target.value as ApplicationStatus)}
-                              className={`px-4 py-2 rounded-xl text-xs font-bold outline-none border cursor-pointer ${
-                                entry.status === 'offer' ? 'bg-emerald-50 text-emerald-800 border-emerald-300' :
-                                entry.status === 'interviewing' ? 'bg-amber-50 text-amber-800 border-amber-300' :
-                                entry.status === 'applied' ? 'bg-blue-50 text-blue-800 border-blue-300' :
-                                entry.status === 'rejected' ? 'bg-red-50 text-red-800 border-red-300' :
-                                'bg-slate-50 text-slate-700 border-slate-300'
-                              }`}
-                            >
-                              <option value="saved">📌 Saved</option>
-                              <option value="applied">📩 Applied</option>
-                              <option value="interviewing">🎙️ Interviewing</option>
-                              <option value="offer">🎉 Offer Received</option>
-                              <option value="rejected">❌ Rejected</option>
-                            </select>
+                          {/* Status Stepper Progress Bar */}
+                          <div className="pt-2 border-t border-neutral-100">
+                            <StatusStepper status={entry.status} />
+                          </div>
 
-                            {entry.applicationLink && (
-                              <a 
-                                href={entry.applicationLink} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all"
-                                title="Open Job Posting"
-                              >
-                                <ExternalLink className="w-4 h-4" />
-                              </a>
-                            )}
-
+                          {/* Notes display */}
+                          <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-200 flex items-start justify-between gap-4">
+                            <div className="space-y-1">
+                              <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400 flex items-center gap-1">
+                                <Edit3 className="w-3 h-3" /> Candidate Notes:
+                              </span>
+                              <p className="text-xs font-medium text-neutral-700">{entry.notes || 'No notes added yet. Click edit to record interview feedback or follow-up details.'}</p>
+                            </div>
                             <button 
-                              onClick={() => handleDeleteTrackedJob(entry.jobId)}
-                              className="p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                              title="Delete Entry"
+                              onClick={() => {
+                                setEditingNotesJobId(entry.jobId);
+                                setTempNotesText(entry.notes || '');
+                              }}
+                              className="text-xs font-bold text-amber-700 hover:text-amber-900 underline flex-shrink-0"
                             >
-                              <Trash2 className="w-4 h-4" />
+                              Edit Notes
                             </button>
                           </div>
                         </div>
-
-                        {/* Status Stepper Progress Bar */}
-                        <div className="pt-2 border-t border-slate-100">
-                          <StatusStepper status={entry.status} />
-                        </div>
-
-                        {/* Notes display */}
-                        <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex items-start justify-between gap-4">
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                              <Edit3 className="w-3 h-3" /> Candidate Notes:
-                            </span>
-                            <p className="text-xs font-medium text-slate-700">{entry.notes || 'No notes added yet. Click edit to record interview feedback or follow-up details.'}</p>
-                          </div>
-                          <button 
-                            onClick={() => {
-                              setEditingNotesJobId(entry.jobId);
-                              setTempNotesText(entry.notes || '');
-                            }}
-                            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline flex-shrink-0"
-                          >
-                            Edit Notes
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                  )}
                 </div>
               )}
             </motion.div>
@@ -1906,28 +2069,28 @@ export default function App() {
             >
               <header className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-4xl font-black tracking-tight text-slate-900">Saved Roles & Bookmarks</h2>
-                  <p className="text-slate-500 mt-2 font-medium text-sm">Targeted applications saved for outreach and tracking.</p>
+                  <h2 className="text-4xl font-black tracking-tight text-neutral-950">Saved Roles & Bookmarks</h2>
+                  <p className="text-neutral-500 mt-2 font-medium text-sm">Targeted applications saved for outreach and tracking.</p>
                 </div>
-                <span className="bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl text-sm font-bold border border-indigo-200">
+                <span className="bg-amber-50 text-amber-900 px-4 py-2 rounded-xl text-sm font-bold border border-amber-300">
                   {savedJobsList.length} Saved
                 </span>
               </header>
 
               {!currentUser && (
-                <div className="bg-gradient-to-r from-indigo-900 to-slate-900 text-white rounded-3xl p-6 shadow-md border border-indigo-700/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="bg-neutral-950 text-white rounded-3xl p-6 shadow-md border border-amber-500/30 flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
-                      <Bookmark className="w-5 h-5 text-indigo-400" />
+                      <Bookmark className="w-5 h-5 text-amber-400" />
                       <h4 className="font-bold text-base text-white">Guest Session — Sign in to Save Roles</h4>
                     </div>
-                    <p className="text-xs text-slate-300 max-w-xl leading-relaxed">
+                    <p className="text-xs text-neutral-300 max-w-xl leading-relaxed">
                       Saved jobs are tied directly to your account and synced with your cloud database. Sign in or register to bookmark jobs and prepare applications.
                     </p>
                   </div>
                   <button
                     onClick={() => setShowAuthModal(true)}
-                    className="bg-indigo-500 hover:bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all whitespace-nowrap self-start md:self-auto flex items-center gap-2"
+                    className="bg-neutral-900 hover:bg-black text-amber-400 border border-amber-500/40 px-5 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all whitespace-nowrap self-start md:self-auto flex items-center gap-2"
                   >
                     <LogIn className="w-4 h-4" /> Sign In / Sign Up
                   </button>
@@ -1935,14 +2098,14 @@ export default function App() {
               )}
 
               {savedJobsList.length === 0 ? (
-                <div className="bg-white border border-slate-200 rounded-3xl p-16 text-center space-y-4 shadow-sm">
-                  <div className="bg-indigo-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto text-indigo-600">
+                <div className="bg-white border border-neutral-200 rounded-3xl p-16 text-center space-y-4 shadow-sm">
+                  <div className="bg-amber-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto text-amber-600 border border-amber-200">
                     <Bookmark className="w-8 h-8" />
                   </div>
-                  <h3 className="text-xl font-extrabold text-slate-900">
+                  <h3 className="text-xl font-extrabold text-neutral-950">
                     {!currentUser ? 'No saved roles in guest mode' : 'No saved roles yet'}
                   </h3>
-                  <p className="text-slate-500 max-w-md mx-auto text-sm leading-relaxed">
+                  <p className="text-neutral-500 max-w-md mx-auto text-sm leading-relaxed">
                     {!currentUser 
                       ? 'Sign in to bookmark matches from the dashboard and manage your application pipeline across devices.' 
                       : 'Click "Save Job" on any match in your dashboard to track roles you plan to apply to.'}
@@ -1951,14 +2114,14 @@ export default function App() {
                     {!currentUser ? (
                       <button 
                         onClick={() => setShowAuthModal(true)}
-                        className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-md flex items-center gap-2"
+                        className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-md flex items-center gap-2"
                       >
                         <LogIn className="w-4 h-4" /> Sign In to Save Roles
                       </button>
                     ) : (
                       <button 
                         onClick={() => setCurrentView('dashboard')}
-                        className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-indigo-700 transition-all shadow-md"
+                        className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-6 py-3 rounded-xl font-bold text-sm transition-all shadow-md"
                       >
                         Browse Identified Opportunities
                       </button>
@@ -1994,35 +2157,35 @@ export default function App() {
             >
               <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-4xl font-black tracking-tight text-slate-900">Candidate Profile & Settings</h2>
-                  <p className="text-slate-500 mt-1 font-medium text-sm">Configure target roles, skills, and sync your preferences securely to Firestore.</p>
+                  <h2 className="text-4xl font-black tracking-tight text-neutral-950">Candidate Profile & Settings</h2>
+                  <p className="text-neutral-500 mt-1 font-medium text-sm">Configure target roles, skills, and sync your preferences securely to Firestore.</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setShowCvParserModal(true)}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-2"
+                    className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-2"
                   >
                     <Wand2 className="w-4 h-4" /> AI Resume Ingestion
                   </button>
                   <button
                     onClick={handleSaveProfileManual}
-                    className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl font-bold text-xs shadow-md transition-all flex items-center gap-2"
+                    className="bg-white hover:bg-neutral-50 text-neutral-900 border border-neutral-300 px-4 py-2.5 rounded-xl font-bold text-xs shadow-sm transition-all flex items-center gap-2"
                   >
-                    <Save className="w-4 h-4 text-emerald-400" />
+                    <Save className="w-4 h-4 text-emerald-600" />
                     {profileSaveSuccess ? 'Saved to Cloud!' : 'Save Parameters'}
                   </button>
                 </div>
               </header>
 
               {/* 1-Click Role Presets */}
-              <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4">
+              <div className="bg-white border border-neutral-200 p-6 rounded-3xl shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                      <Sparkles className="w-5 h-5 text-indigo-600" />
+                    <h3 className="font-extrabold text-neutral-950 text-base flex items-center gap-2">
+                      <Sparkles className="w-5 h-5 text-amber-600" />
                       1-Click Career Role Presets
                     </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Switch presets instantly to test AI job match algorithms for different career paths.</p>
+                    <p className="text-xs text-neutral-500 mt-0.5">Switch presets instantly to test AI job match algorithms for different career paths.</p>
                   </div>
                 </div>
 
@@ -2035,16 +2198,16 @@ export default function App() {
                         onClick={() => handleSelectPreset(preset.id)}
                         className={`p-4 rounded-2xl border text-left transition-all relative ${
                           isSelected
-                            ? 'bg-indigo-50 border-indigo-500 shadow-sm ring-2 ring-indigo-200'
-                            : 'bg-slate-50/50 border-slate-200 hover:border-indigo-300 hover:bg-white'
+                            ? 'bg-amber-50 border-amber-500 shadow-sm ring-2 ring-amber-200'
+                            : 'bg-neutral-50/50 border-neutral-200 hover:border-amber-300 hover:bg-white'
                         }`}
                       >
                         {isSelected && (
-                          <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
+                          <span className="absolute top-3 right-3 w-2 h-2 rounded-full bg-amber-600 animate-pulse"></span>
                         )}
-                        <p className={`font-black text-xs ${isSelected ? 'text-indigo-900' : 'text-slate-900'}`}>{preset.title || preset.name}</p>
-                        <p className="text-[11px] font-bold text-indigo-600 mt-0.5">{preset.profile.targetSalary}</p>
-                        <p className="text-[10px] text-slate-500 mt-1.5 line-clamp-2">{preset.description}</p>
+                        <p className={`font-black text-xs ${isSelected ? 'text-amber-950' : 'text-neutral-900'}`}>{preset.title || preset.name}</p>
+                        <p className="text-[11px] font-bold text-amber-700 mt-0.5">{preset.profile.targetSalary}</p>
+                        <p className="text-[10px] text-neutral-500 mt-1.5 line-clamp-2">{preset.description}</p>
                       </button>
                     );
                   })}
@@ -2063,7 +2226,7 @@ export default function App() {
 
                   <ProfileSection title="Experience Summary">
                     <textarea 
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none min-h-[140px] leading-relaxed"
+                      className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-4 text-sm font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all outline-none min-h-[140px] leading-relaxed"
                       value={profile.experienceSummary}
                       onChange={(e) => setProfile({...profile, experienceSummary: e.target.value})}
                     />
@@ -2072,11 +2235,11 @@ export default function App() {
                   <ProfileSection title="Target Roles">
                     <div className="flex flex-wrap gap-2.5 mb-4">
                       {profile.targetRoles.map((role, i) => (
-                        <span key={i} className="bg-indigo-50 text-indigo-700 px-3.5 py-2 rounded-xl text-xs font-bold border border-indigo-100 flex items-center gap-2">
+                        <span key={i} className="bg-amber-50 text-amber-900 px-3.5 py-2 rounded-xl text-xs font-bold border border-amber-300 flex items-center gap-2">
                           {role}
                           <button 
                             onClick={() => handleRemoveRole(role)}
-                            className="text-indigo-400 hover:text-indigo-700 transition-colors"
+                            className="text-amber-600 hover:text-amber-900 transition-colors"
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
@@ -2089,20 +2252,20 @@ export default function App() {
                         <input 
                           type="text" 
                           placeholder="e.g. IT Governance Lead"
-                          className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                          className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2 text-xs font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
                           value={newRole}
                           onChange={(e) => setNewRole(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && handleAddRole()}
                         />
                         <button 
                           onClick={handleAddRole}
-                          className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700"
+                          className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm"
                         >
                           Add
                         </button>
                         <button 
                           onClick={() => setShowAddRole(false)}
-                          className="text-slate-400 hover:text-slate-600 p-2"
+                          className="text-neutral-400 hover:text-neutral-600 p-2"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -2110,9 +2273,9 @@ export default function App() {
                     ) : (
                       <button 
                         onClick={() => setShowAddRole(true)}
-                        className="bg-white border border-dashed border-slate-300 text-slate-500 hover:text-indigo-600 hover:border-indigo-400 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                        className="bg-white border border-dashed border-neutral-300 text-neutral-600 hover:text-amber-800 hover:border-amber-400 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
                       >
-                        <Plus className="w-3.5 h-3.5" /> Add Target Role
+                        <Plus className="w-3.5 h-3.5 text-amber-600" /> Add Target Role
                       </button>
                     )}
                   </ProfileSection>
@@ -2120,11 +2283,11 @@ export default function App() {
                   <ProfileSection title="Core Competencies & Key Skills">
                     <div className="flex flex-wrap gap-2 mb-4">
                       {profile.keySkills.map((skill, i) => (
-                        <span key={i} className="text-xs font-bold text-slate-700 bg-slate-100 border border-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-2">
+                        <span key={i} className="text-xs font-bold text-neutral-800 bg-neutral-100 border border-neutral-200 px-3 py-1.5 rounded-lg flex items-center gap-2">
                           {skill}
                           <button 
                             onClick={() => handleRemoveSkill(skill)}
-                            className="text-slate-400 hover:text-slate-700 transition-colors"
+                            className="text-neutral-400 hover:text-neutral-700 transition-colors"
                           >
                             <X className="w-3 h-3" />
                           </button>
@@ -2137,20 +2300,20 @@ export default function App() {
                         <input 
                           type="text" 
                           placeholder="e.g. ServiceNow, ITIL v4"
-                          className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                          className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2 text-xs font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
                           value={newSkill}
                           onChange={(e) => setNewSkill(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && handleAddSkill()}
                         />
                         <button 
                           onClick={handleAddSkill}
-                          className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700"
+                          className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm"
                         >
                           Add
                         </button>
                         <button 
                           onClick={() => setShowAddSkill(false)}
-                          className="text-slate-400 hover:text-slate-600 p-2"
+                          className="text-neutral-400 hover:text-neutral-600 p-2"
                         >
                           <X className="w-4 h-4" />
                         </button>
@@ -2158,9 +2321,9 @@ export default function App() {
                     ) : (
                       <button 
                         onClick={() => setShowAddSkill(true)}
-                        className="bg-white border border-dashed border-slate-300 text-slate-500 hover:text-indigo-600 hover:border-indigo-400 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                        className="bg-white border border-dashed border-neutral-300 text-neutral-600 hover:text-amber-800 hover:border-amber-400 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
                       >
-                        <Plus className="w-3.5 h-3.5" /> Add Competency Skill
+                        <Plus className="w-3.5 h-3.5 text-amber-600" /> Add Competency Skill
                       </button>
                     )}
                   </ProfileSection>
@@ -2168,31 +2331,31 @@ export default function App() {
 
                 <div className="space-y-6">
                   {/* Cloud Database Sync Status Card */}
-                  <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4">
+                  <div className="bg-white border border-neutral-200 p-6 rounded-3xl shadow-sm space-y-4">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
-                        <Database className="w-4 h-4 text-indigo-600" />
+                      <h4 className="font-extrabold text-neutral-950 text-sm flex items-center gap-2">
+                        <Database className="w-4 h-4 text-amber-600" />
                         Cloud Persistence
                       </h4>
                       {currentUser ? (
-                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Synced</span>
+                        <span className="bg-amber-50 text-amber-900 border border-amber-300 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Synced</span>
                       ) : (
-                        <span className="bg-amber-100 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Guest</span>
+                        <span className="bg-neutral-100 text-neutral-700 border border-neutral-200 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">Guest</span>
                       )}
                     </div>
                     {currentUser ? (
-                      <div className="space-y-2 text-xs text-slate-600">
-                        <p className="font-bold text-slate-900">{currentUser.displayName || currentUser.email}</p>
-                        <p className="text-[11px] text-slate-500">Your profile, saved jobs, pipeline status, and custom searches are automatically synced to Firestore database.</p>
+                      <div className="space-y-2 text-xs text-neutral-600">
+                        <p className="font-bold text-neutral-950">{currentUser.displayName || currentUser.email}</p>
+                        <p className="text-[11px] text-neutral-500">Your profile, saved jobs, pipeline status, and custom searches are automatically synced to Firestore database.</p>
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        <p className="text-xs text-slate-500 leading-relaxed">
+                        <p className="text-xs text-neutral-500 leading-relaxed">
                           Create an account or sign in so you can access your saved jobs and target profile on any device.
                         </p>
                         <button
                           onClick={() => setShowAuthModal(true)}
-                          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2.5 rounded-xl font-bold text-xs transition-all shadow-sm flex items-center justify-center gap-1.5"
+                          className="w-full bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 py-2.5 rounded-xl font-bold text-xs transition-all shadow-sm flex items-center justify-center gap-1.5"
                         >
                           <LogIn className="w-3.5 h-3.5" /> Sign In / Sign Up
                         </button>
@@ -2200,10 +2363,10 @@ export default function App() {
                     )}
                   </div>
 
-                  <div className="bg-indigo-900 text-white p-8 rounded-3xl shadow-xl shadow-indigo-100 relative overflow-hidden">
-                    <Zap className="w-32 h-32 text-white/10 absolute -right-8 -bottom-8 rotate-12" />
-                    <h3 className="text-xl font-extrabold mb-3 relative z-10">Agent Retraining</h3>
-                    <p className="text-indigo-100 text-xs mb-6 leading-relaxed relative z-10">
+                  <div className="bg-neutral-950 text-white p-8 rounded-3xl shadow-xl border border-amber-500/30 relative overflow-hidden">
+                    <Zap className="w-32 h-32 text-amber-400/10 absolute -right-8 -bottom-8 rotate-12" />
+                    <h3 className="text-xl font-extrabold mb-3 relative z-10 text-white">Agent Retraining</h3>
+                    <p className="text-neutral-300 text-xs mb-6 leading-relaxed relative z-10">
                       Updating profile parameters automatically persists your data and re-calibrates Gemini search algorithms.
                     </p>
                     <button 
@@ -2212,21 +2375,21 @@ export default function App() {
                         setCurrentView('dashboard');
                       }}
                       disabled={loading}
-                      className="w-full bg-white text-indigo-900 py-4 rounded-2xl font-black hover:bg-indigo-50 transition-all shadow-lg relative z-10 flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+                      className="w-full bg-white text-neutral-950 py-4 rounded-2xl font-black hover:bg-neutral-100 transition-all shadow-lg relative z-10 flex items-center justify-center gap-2 text-sm disabled:opacity-50 border border-neutral-200"
                     >
-                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                      {loading ? <Loader2 className="w-4 h-4 animate-spin text-amber-600" /> : <RefreshCw className="w-4 h-4 text-amber-600" />}
                       Save & Re-Sync Agent
                     </button>
                   </div>
 
-                  <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm">
-                    <h4 className="font-bold text-slate-900 mb-3 text-sm flex items-center gap-2">
+                  <div className="bg-white border border-neutral-200 p-6 rounded-3xl shadow-sm">
+                    <h4 className="font-bold text-neutral-950 mb-3 text-sm flex items-center gap-2">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                       Companies Background
                     </h4>
                     <div className="flex flex-wrap gap-2">
                       {profile.companiesWorkedAt.map((company, i) => (
-                        <span key={i} className="text-xs font-extrabold text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
+                        <span key={i} className="text-xs font-extrabold text-neutral-800 bg-neutral-100 px-3 py-1.5 rounded-lg border border-neutral-200">
                           {company}
                         </span>
                       ))}
@@ -2248,25 +2411,25 @@ export default function App() {
             >
               <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-4xl font-black tracking-tight text-slate-900">CV & ATS Optimization Engine</h2>
-                  <p className="text-slate-500 mt-2 font-medium text-sm">Comprehensive ATS auditing, CV drafting, STAR bullet generator, cover letters & interview prep.</p>
+                  <h2 className="text-4xl font-black tracking-tight text-neutral-950">CV & ATS Optimization Engine</h2>
+                  <p className="text-neutral-500 mt-2 font-medium text-sm">Comprehensive ATS auditing, CV drafting, STAR bullet generator, cover letters & interview prep.</p>
                 </div>
                 <button 
                   onClick={runAtsAudit}
                   disabled={loadingAts}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl font-black transition-all shadow-lg shadow-indigo-100 flex items-center gap-2 text-sm disabled:opacity-50"
+                  className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-6 py-3 rounded-2xl font-black transition-all shadow-lg flex items-center gap-2 text-sm disabled:opacity-50"
                 >
-                  {loadingAts ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  {loadingAts ? <Loader2 className="w-4 h-4 animate-spin text-amber-400" /> : <Sparkles className="w-4 h-4 text-amber-400" />}
                   {atsAnalysis ? 'Re-Scan & Optimize' : 'Run Complete ATS Audit'}
                 </button>
               </header>
 
               {/* Sub-navigation tools bar */}
-              <div className="flex items-center gap-2 border-b border-slate-200 pb-4 overflow-x-auto scrollbar-none">
+              <div className="flex items-center gap-2 border-b border-neutral-200 pb-4 overflow-x-auto scrollbar-none">
                 <button 
                   onClick={() => setAtsSubTab('audit')}
                   className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-                    atsSubTab === 'audit' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    atsSubTab === 'audit' ? 'bg-neutral-950 text-amber-400 border border-amber-500/40 shadow-sm' : 'bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50'
                   }`}
                 >
                   <Award className="w-4 h-4" /> ATS Audit & Keywords
@@ -2274,7 +2437,7 @@ export default function App() {
                 <button 
                   onClick={() => setAtsSubTab('summaries')}
                   className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-                    atsSubTab === 'summaries' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    atsSubTab === 'summaries' ? 'bg-neutral-950 text-amber-400 border border-amber-500/40 shadow-sm' : 'bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50'
                   }`}
                 >
                   <Sparkles className="w-4 h-4" /> Executive Summaries
@@ -2282,7 +2445,7 @@ export default function App() {
                 <button 
                   onClick={() => setAtsSubTab('bullets')}
                   className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-                    atsSubTab === 'bullets' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    atsSubTab === 'bullets' ? 'bg-neutral-950 text-amber-400 border border-amber-500/40 shadow-sm' : 'bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50'
                   }`}
                 >
                   <ListChecks className="w-4 h-4" /> STAR Experience Bullets
@@ -2290,7 +2453,7 @@ export default function App() {
                 <button 
                   onClick={() => setAtsSubTab('coverletter')}
                   className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-                    atsSubTab === 'coverletter' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    atsSubTab === 'coverletter' ? 'bg-neutral-950 text-amber-400 border border-amber-500/40 shadow-sm' : 'bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50'
                   }`}
                 >
                   <Send className="w-4 h-4" /> Cover Letter Studio
@@ -2298,7 +2461,7 @@ export default function App() {
                 <button 
                   onClick={() => setAtsSubTab('cvdraft')}
                   className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-                    atsSubTab === 'cvdraft' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    atsSubTab === 'cvdraft' ? 'bg-neutral-950 text-amber-400 border border-amber-500/40 shadow-sm' : 'bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50'
                   }`}
                 >
                   <Layers className="w-4 h-4" /> Full CV Draft
@@ -2306,7 +2469,7 @@ export default function App() {
                 <button 
                   onClick={() => setAtsSubTab('interview')}
                   className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
-                    atsSubTab === 'interview' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    atsSubTab === 'interview' ? 'bg-neutral-950 text-amber-400 border border-amber-500/40 shadow-sm' : 'bg-white text-neutral-600 border border-neutral-200 hover:bg-neutral-50'
                   }`}
                 >
                   <MessageSquare className="w-4 h-4" /> Interview Prep Simulator
@@ -2314,19 +2477,19 @@ export default function App() {
               </div>
 
               {!atsAnalysis && !loadingAts && (
-                <div className="bg-white border border-slate-200 rounded-3xl p-16 text-center space-y-6 shadow-sm">
-                  <div className="bg-indigo-50 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto text-indigo-600 shadow-inner">
+                <div className="bg-white border border-neutral-200 rounded-3xl p-16 text-center space-y-6 shadow-sm">
+                  <div className="bg-amber-50 w-20 h-20 rounded-2xl flex items-center justify-center mx-auto text-amber-600 border border-amber-200">
                     <Award className="w-10 h-10" />
                   </div>
                   <div className="max-w-md mx-auto space-y-2">
-                    <h3 className="text-2xl font-black text-slate-900">Execute Enterprise ATS Scan</h3>
-                    <p className="text-slate-500 text-sm leading-relaxed">
+                    <h3 className="text-2xl font-black text-neutral-950">Execute Enterprise ATS Scan</h3>
+                    <p className="text-neutral-500 text-sm leading-relaxed">
                       Evaluate your candidate profile against standard Applicant Tracking Systems used by top South Africa IT recruiters.
                     </p>
                   </div>
                   <button 
                     onClick={runAtsAudit}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-black text-sm shadow-lg shadow-indigo-100 transition-all"
+                    className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-8 py-4 rounded-2xl font-black text-sm shadow-lg transition-all"
                   >
                     Run Instant ATS Audit
                   </button>
@@ -2335,8 +2498,8 @@ export default function App() {
 
               {loadingAts && (
                 <div className="flex flex-col items-center justify-center py-24 space-y-4">
-                  <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
-                  <p className="font-bold text-slate-900 text-lg">Parsing Profile & Generating Tailored CV Optimizations...</p>
+                  <div className="w-16 h-16 border-4 border-amber-200 border-t-amber-600 rounded-full animate-spin"></div>
+                  <p className="font-bold text-neutral-950 text-lg">Parsing Profile & Generating Tailored CV Optimizations...</p>
                 </div>
               )}
 
@@ -2350,7 +2513,7 @@ export default function App() {
                         <AtsMetricCard 
                           label="Overall ATS Score" 
                           score={atsAnalysis.overallAtsScore} 
-                          icon={<Award className="w-5 h-5 text-indigo-600" />}
+                          icon={<Award className="w-5 h-5 text-amber-600" />}
                           status="Excellent Match"
                         />
                         <AtsMetricCard 
@@ -2362,7 +2525,7 @@ export default function App() {
                         <AtsMetricCard 
                           label="Formatting Readiness" 
                           score={atsAnalysis.formattingScore} 
-                          icon={<FileText className="w-5 h-5 text-blue-600" />}
+                          icon={<FileText className="w-5 h-5 text-neutral-700" />}
                           status="Clean Layout"
                         />
                         <AtsMetricCard 
@@ -2375,8 +2538,8 @@ export default function App() {
 
                       {/* Keywords Comparison */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
-                          <h4 className="font-bold text-slate-900 flex items-center justify-between text-sm uppercase tracking-wider">
+                        <div className="bg-white border border-neutral-200 p-8 rounded-3xl shadow-sm space-y-6">
+                          <h4 className="font-bold text-neutral-950 flex items-center justify-between text-sm uppercase tracking-wider">
                             <span className="flex items-center gap-2">
                               <CheckCircle2 className="w-5 h-5 text-emerald-500" />
                               Matched Enterprise Keywords ({atsAnalysis.matchedKeywords.length})
@@ -2392,8 +2555,8 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
-                          <h4 className="font-bold text-slate-900 flex items-center justify-between text-sm uppercase tracking-wider">
+                        <div className="bg-white border border-neutral-200 p-8 rounded-3xl shadow-sm space-y-6">
+                          <h4 className="font-bold text-neutral-950 flex items-center justify-between text-sm uppercase tracking-wider">
                             <span className="flex items-center gap-2">
                               <AlertCircle className="w-5 h-5 text-amber-500" />
                               Missing Keywords (Click + to Add)
@@ -2409,7 +2572,7 @@ export default function App() {
                                   disabled={alreadyAdded}
                                   className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${
                                     alreadyAdded 
-                                      ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-default'
+                                      ? 'bg-neutral-100 text-neutral-400 border-neutral-200 cursor-default'
                                       : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100 active:scale-95'
                                   }`}
                                   title={alreadyAdded ? 'Added to Profile' : 'Click to add to your Profile Skills'}
@@ -2425,13 +2588,13 @@ export default function App() {
 
                       {/* Strategic Skills to Add */}
                       {atsAnalysis.suggestedSkillsToAdd && (
-                        <div className="bg-indigo-50/70 border border-indigo-100 p-6 rounded-3xl space-y-3">
+                        <div className="bg-amber-50/70 border border-amber-200 p-6 rounded-3xl space-y-3">
                           <div className="flex items-center justify-between">
-                            <h4 className="font-extrabold text-indigo-950 text-xs uppercase tracking-widest flex items-center gap-2">
-                              <Sparkles className="w-4 h-4 text-indigo-600" />
+                            <h4 className="font-extrabold text-amber-950 text-xs uppercase tracking-widest flex items-center gap-2">
+                              <Sparkles className="w-4 h-4 text-amber-600" />
                               Strategic Recruiter Keywords to Inject
                             </h4>
-                            <span className="text-[10px] font-bold text-indigo-500">Click to instantly append to Profile Skills</span>
+                            <span className="text-[10px] font-bold text-amber-700">Click to instantly append to Profile Skills</span>
                           </div>
                           <div className="flex flex-wrap gap-2">
                             {atsAnalysis.suggestedSkillsToAdd.map((skill, i) => {
@@ -2444,7 +2607,7 @@ export default function App() {
                                   className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-all flex items-center gap-1.5 ${
                                     alreadyAdded 
                                       ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                                      : 'bg-white text-indigo-900 border-indigo-200 hover:bg-indigo-600 hover:text-white'
+                                      : 'bg-white text-neutral-900 border-neutral-300 hover:bg-neutral-900 hover:text-white'
                                   }`}
                                 >
                                   {alreadyAdded ? <Check className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
@@ -2458,35 +2621,35 @@ export default function App() {
 
                       {/* Pitch & Format Suggestions */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="bg-slate-900 text-white p-8 rounded-3xl shadow-xl space-y-6 relative overflow-hidden">
-                          <Sparkles className="w-32 h-32 text-indigo-500/10 absolute -right-6 -bottom-6" />
+                        <div className="bg-neutral-950 text-white p-8 rounded-3xl shadow-xl border border-amber-500/30 space-y-6 relative overflow-hidden">
+                          <Sparkles className="w-32 h-32 text-amber-400/10 absolute -right-6 -bottom-6" />
                           <div className="flex items-center justify-between relative z-10">
-                            <h4 className="font-bold text-indigo-300 text-sm uppercase tracking-wider flex items-center gap-2">
+                            <h4 className="font-bold text-amber-400 text-sm uppercase tracking-wider flex items-center gap-2">
                               <Sparkles className="w-4 h-4" />
                               Executive Recruiter Pitch
                             </h4>
                             <button 
                               onClick={() => handleCopyText(atsAnalysis.executivePitch, 'pitch')}
-                              className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5"
+                              className="bg-white/10 hover:bg-white/20 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border border-white/10"
                             >
                               {copiedItemKey === 'pitch' ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                               {copiedItemKey === 'pitch' ? 'Copied' : 'Copy Pitch'}
                             </button>
                           </div>
-                          <p className="text-slate-200 text-sm leading-relaxed font-medium relative z-10 bg-white/5 p-5 rounded-2xl border border-white/10 italic">
+                          <p className="text-neutral-200 text-sm leading-relaxed font-medium relative z-10 bg-white/5 p-5 rounded-2xl border border-white/10 italic">
                             "{atsAnalysis.executivePitch}"
                           </p>
                         </div>
 
-                        <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
-                          <h4 className="font-bold text-slate-900 text-sm uppercase tracking-wider flex items-center gap-2">
-                            <FileText className="w-4 h-4 text-indigo-600" />
+                        <div className="bg-white border border-neutral-200 p-8 rounded-3xl shadow-sm space-y-6">
+                          <h4 className="font-bold text-neutral-950 text-sm uppercase tracking-wider flex items-center gap-2">
+                            <FileText className="w-4 h-4 text-amber-600" />
                             Formatting & Content Optimization
                           </h4>
                           <ul className="space-y-3">
                             {atsAnalysis.formattingSuggestions.map((sug, i) => (
-                              <li key={i} className="text-sm text-slate-600 flex items-start gap-3 leading-relaxed">
-                                <ChevronRight className="w-4 h-4 mt-0.5 text-indigo-600 flex-shrink-0" />
+                              <li key={i} className="text-sm text-neutral-600 flex items-start gap-3 leading-relaxed">
+                                <ChevronRight className="w-4 h-4 mt-0.5 text-amber-600 flex-shrink-0" />
                                 {sug}
                               </li>
                             ))}
@@ -2501,17 +2664,17 @@ export default function App() {
                     <div className="space-y-6">
                       <div className="flex items-center justify-between">
                         <div>
-                          <h3 className="text-xl font-bold text-slate-900">Tailored CV Executive Summaries</h3>
-                          <p className="text-slate-500 text-xs mt-1">Select and copy targeted profile intro statements designed for high ATS parsing.</p>
+                          <h3 className="text-xl font-bold text-neutral-950">Tailored CV Executive Summaries</h3>
+                          <p className="text-neutral-500 text-xs mt-1">Select and copy targeted profile intro statements designed for high ATS parsing.</p>
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 gap-6">
                         {(atsAnalysis.optimizedSummaries || []).map((summaryItem, idx) => (
-                          <div key={idx} className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4">
+                          <div key={idx} className="bg-white border border-neutral-200 p-6 rounded-3xl shadow-sm space-y-4">
                             <div className="flex items-center justify-between">
-                              <span className="text-xs font-black uppercase tracking-wider px-3 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center gap-2">
-                                <Sparkles className="w-3.5 h-3.5" />
+                              <span className="text-xs font-black uppercase tracking-wider px-3 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-300 flex items-center gap-2">
+                                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
                                 {summaryItem.style}
                               </span>
                               <div className="flex items-center gap-2">
@@ -2520,20 +2683,20 @@ export default function App() {
                                     setProfile({ ...profile, experienceSummary: summaryItem.summaryText });
                                     handleCopyText(summaryItem.summaryText, `summary-${idx}`);
                                   }}
-                                  className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-all"
+                                  className="text-xs font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-lg transition-all"
                                 >
                                   Use in Profile
                                 </button>
                                 <button 
                                   onClick={() => handleCopyText(summaryItem.summaryText, `summary-${idx}`)}
-                                  className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
+                                  className="text-xs font-bold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
                                 >
                                   {copiedItemKey === `summary-${idx}` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                                   {copiedItemKey === `summary-${idx}` ? 'Copied' : 'Copy'}
                                 </button>
                               </div>
                             </div>
-                            <p className="text-slate-700 text-sm leading-relaxed font-medium bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                            <p className="text-neutral-700 text-sm leading-relaxed font-medium bg-neutral-50 p-4 rounded-2xl border border-neutral-200">
                               {summaryItem.summaryText}
                             </p>
                           </div>
@@ -2546,32 +2709,32 @@ export default function App() {
                   {atsSubTab === 'bullets' && (
                     <div className="space-y-6">
                       <div>
-                        <h3 className="text-xl font-bold text-slate-900">Metric-Driven STAR Experience Bullets</h3>
-                        <p className="text-slate-500 text-xs mt-1">High-impact bullet points quantifying achievements for your target IT roles.</p>
+                        <h3 className="text-xl font-bold text-neutral-950">Metric-Driven STAR Experience Bullets</h3>
+                        <p className="text-neutral-500 text-xs mt-1">High-impact bullet points quantifying achievements for your target IT roles.</p>
                       </div>
 
                       <div className="space-y-4">
                         {(atsAnalysis.recommendedBulletPoints || []).map((bullet, idx) => (
-                          <div key={idx} className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-3">
+                          <div key={idx} className="bg-white border border-neutral-200 p-6 rounded-3xl shadow-sm space-y-3">
                             <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                                Target Role: <strong className="text-indigo-600">{bullet.targetRole}</strong>
+                              <span className="text-[10px] font-black uppercase tracking-widest text-neutral-400">
+                                Target Role: <strong className="text-amber-800">{bullet.targetRole}</strong>
                               </span>
                               <button 
                                 onClick={() => handleCopyText(bullet.enhancedBullet, `bullet-${idx}`)}
-                                className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
+                                className="text-xs font-bold text-neutral-900 bg-neutral-100 hover:bg-neutral-200 border border-neutral-200 px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5"
                               >
                                 {copiedItemKey === `bullet-${idx}` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                                 {copiedItemKey === `bullet-${idx}` ? 'Copied' : 'Copy Bullet Point'}
                               </button>
                             </div>
-                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 font-semibold text-slate-800 text-sm leading-relaxed">
+                            <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-200 font-semibold text-neutral-800 text-sm leading-relaxed">
                               • {bullet.enhancedBullet}
                             </div>
                             <div className="flex flex-wrap items-center gap-2 text-xs">
-                              <span className="text-slate-400 font-bold text-[10px] uppercase">Keywords injected:</span>
+                              <span className="text-neutral-400 font-bold text-[10px] uppercase">Keywords injected:</span>
                               {bullet.addedKeywords.map((kw, i) => (
-                                <span key={i} className="bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded text-[10px] font-bold border border-emerald-100">
+                                <span key={i} className="bg-amber-50 text-amber-900 px-2.5 py-0.5 rounded text-[10px] font-bold border border-amber-300">
                                   {kw}
                                 </span>
                               ))}
@@ -2585,26 +2748,26 @@ export default function App() {
                   {/* SUB-TAB 4: AI COVER LETTER STUDIO */}
                   {atsSubTab === 'coverletter' && (
                     <div className="space-y-6">
-                      <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
+                      <div className="bg-white border border-neutral-200 p-8 rounded-3xl shadow-sm space-y-6">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                           <div>
-                            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                              <Send className="w-5 h-5 text-indigo-600" />
+                            <h3 className="text-xl font-bold text-neutral-950 flex items-center gap-2">
+                              <Send className="w-5 h-5 text-amber-600" />
                               AI Cover Letter Studio
                             </h3>
-                            <p className="text-slate-500 text-xs mt-1">Generate a highly targeted cover letter tailored to any South Africa enterprise hiring manager.</p>
+                            <p className="text-neutral-500 text-xs mt-1">Generate a highly targeted cover letter tailored to any South Africa enterprise hiring manager.</p>
                           </div>
                           
                           <div className="flex items-center gap-3 flex-wrap">
                             <input 
                               type="text" 
                               placeholder="Company (e.g., Vodacom, Standard Bank)"
-                              className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500 min-w-[180px]"
+                              className="bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 min-w-[180px]"
                               value={targetCompanyForCover}
                               onChange={(e) => setTargetCompanyForCover(e.target.value)}
                             />
                             <select 
-                              className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                              className="bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                               value={targetRoleForCover}
                               onChange={(e) => setTargetRoleForCover(e.target.value)}
                             >
@@ -2615,22 +2778,22 @@ export default function App() {
                             <button 
                               onClick={() => handleGenerateCoverLetter()}
                               disabled={loadingCover}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 disabled:opacity-50"
+                              className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 disabled:opacity-50 shadow-md"
                             >
-                              {loadingCover ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                              {loadingCover ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-amber-400" />}
                               Generate Letter
                             </button>
                           </div>
                         </div>
 
                         {!coverLetter && !loadingCover && (
-                          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-12 text-center space-y-3">
-                            <FileText className="w-10 h-10 text-indigo-400 mx-auto" />
-                            <h4 className="font-bold text-slate-800 text-sm">No Cover Letter Generated Yet</h4>
-                            <p className="text-slate-500 text-xs max-w-sm mx-auto">Enter a target company name above and click "Generate Letter" to create an executive cover letter.</p>
+                          <div className="bg-neutral-50 border border-dashed border-neutral-200 rounded-2xl p-12 text-center space-y-3">
+                            <FileText className="w-10 h-10 text-amber-500 mx-auto" />
+                            <h4 className="font-bold text-neutral-800 text-sm">No Cover Letter Generated Yet</h4>
+                            <p className="text-neutral-500 text-xs max-w-sm mx-auto">Enter a target company name above and click "Generate Letter" to create an executive cover letter.</p>
                             <button 
                               onClick={() => handleGenerateCoverLetter()}
-                              className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-xs hover:bg-indigo-700 transition-all shadow-md"
+                              className="bg-neutral-950 text-amber-400 border border-amber-500/40 px-6 py-2.5 rounded-xl font-bold text-xs hover:bg-black transition-all shadow-md"
                             >
                               Generate Instant Letter
                             </button>
@@ -2639,28 +2802,28 @@ export default function App() {
 
                         {loadingCover && (
                           <div className="flex flex-col items-center justify-center py-16 space-y-3">
-                            <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-                            <p className="text-sm font-bold text-slate-700">Writing custom executive cover letter...</p>
+                            <Loader2 className="w-8 h-8 text-amber-500 animate-spin" />
+                            <p className="text-sm font-bold text-neutral-700">Writing custom executive cover letter...</p>
                           </div>
                         )}
 
                         {coverLetter && !loadingCover && (
                           <div className="space-y-6">
                             <div className="flex items-center justify-between flex-wrap gap-2">
-                              <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-lg border border-indigo-100">
+                              <span className="text-xs font-bold text-amber-900 bg-amber-50 px-3 py-1 rounded-lg border border-amber-300">
                                 Target: {coverLetter.jobTitle} at {coverLetter.company}
                               </span>
                               <div className="flex items-center gap-2">
                                 <button 
                                   onClick={() => handleCopyText(coverLetter.letterText, 'cover-letter')}
-                                  className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                                  className="bg-white border border-neutral-200 hover:bg-neutral-50 text-neutral-700 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
                                 >
                                   {copiedItemKey === 'cover-letter' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                                   {copiedItemKey === 'cover-letter' ? 'Copied' : 'Copy Text'}
                                 </button>
                                 <button 
                                   onClick={() => handleDownloadTextFile(coverLetter.letterText, `Cover_Letter_${coverLetter.company.replace(/\s+/g, '_')}.txt`)}
-                                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md"
+                                  className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md"
                                 >
                                   <FileDown className="w-3.5 h-3.5" />
                                   Download (.txt)
@@ -2669,15 +2832,15 @@ export default function App() {
                             </div>
 
                             <textarea 
-                              className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-6 text-sm font-medium text-slate-800 leading-relaxed outline-none focus:ring-2 focus:ring-indigo-500 min-h-[320px]"
+                              className="w-full bg-neutral-50 border border-neutral-200 rounded-2xl p-6 text-sm font-medium text-neutral-800 leading-relaxed outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 min-h-[320px]"
                               value={coverLetter.letterText}
                               onChange={(e) => setCoverLetter({...coverLetter, letterText: e.target.value})}
                             />
 
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Key Highlights Included:</span>
+                              <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest">Key Highlights Included:</span>
                               {coverLetter.keyHighlightsUsed.map((h, i) => (
-                                <span key={i} className="text-[10px] font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
+                                <span key={i} className="text-[10px] font-bold text-neutral-700 bg-neutral-100 border border-neutral-200 px-2.5 py-1 rounded-lg">
                                   {h}
                                 </span>
                               ))}
@@ -2691,19 +2854,19 @@ export default function App() {
                   {/* SUB-TAB 5: FULL CV DRAFT */}
                   {atsSubTab === 'cvdraft' && (
                     <div className="space-y-6">
-                      <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
+                      <div className="bg-white border border-neutral-200 p-8 rounded-3xl shadow-sm space-y-6">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                           <div>
-                            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                              <Layers className="w-5 h-5 text-indigo-600" />
+                            <h3 className="text-xl font-bold text-neutral-950 flex items-center gap-2">
+                              <Layers className="w-5 h-5 text-amber-600" />
                               Full Tailored ATS CV Draft
                             </h3>
-                            <p className="text-slate-500 text-xs mt-1">Complete markdown CV document formatted for ATS parsers and human recruiters.</p>
+                            <p className="text-neutral-500 text-xs mt-1">Complete markdown CV document formatted for ATS parsers and human recruiters.</p>
                           </div>
                           
                           <div className="flex items-center gap-3">
                             <select 
-                              className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                              className="bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                               value={targetRoleForCover}
                               onChange={(e) => setTargetRoleForCover(e.target.value)}
                             >
@@ -2714,23 +2877,24 @@ export default function App() {
                             <button 
                               onClick={() => handleGenerateCvDraft()}
                               disabled={loadingCvDraft}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 disabled:opacity-50"
+                              className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 disabled:opacity-50 shadow-md"
                             >
-                              {loadingCvDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                              {loadingCvDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" /> : <Sparkles className="w-3.5 h-3.5 text-amber-400" />}
                               Generate Full CV
                             </button>
                           </div>
                         </div>
 
                         {!cvDraft && !loadingCvDraft && (
-                          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-12 text-center space-y-3">
-                            <FileCheck className="w-10 h-10 text-indigo-400 mx-auto" />
-                            <h4 className="font-bold text-slate-800 text-sm">No Complete CV Generated Yet</h4>
-                            <p className="text-slate-500 text-xs max-w-sm mx-auto">Click "Generate Full CV" to construct an executive ATS-optimized resume draft.</p>
+                          <div className="bg-neutral-50 border border-dashed border-neutral-200 rounded-2xl p-12 text-center space-y-3">
+                            <FileCheck className="w-10 h-10 text-amber-600 mx-auto" />
+                            <h4 className="font-bold text-neutral-800 text-sm">No Complete CV Generated Yet</h4>
+                            <p className="text-neutral-500 text-xs max-w-sm mx-auto">Click "Generate Full CV" to construct an executive ATS-optimized resume draft.</p>
                             <button 
                               onClick={() => handleGenerateCvDraft()}
-                              className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-xs hover:bg-indigo-700 transition-all shadow-md"
+                              className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-6 py-2.5 rounded-xl font-bold text-xs transition-all shadow-md inline-flex items-center gap-2"
                             >
+                              <Sparkles className="w-4 h-4" />
                               Generate Instant CV Draft
                             </button>
                           </div>
@@ -2738,8 +2902,8 @@ export default function App() {
 
                         {loadingCvDraft && (
                           <div className="flex flex-col items-center justify-center py-16 space-y-3">
-                            <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-                            <p className="text-sm font-bold text-slate-700">Synthesizing full executive ATS CV draft...</p>
+                            <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
+                            <p className="text-sm font-bold text-neutral-700">Synthesizing full executive ATS CV draft...</p>
                           </div>
                         )}
 
@@ -2747,20 +2911,20 @@ export default function App() {
                           <div className="space-y-6">
                             <div className="flex items-center justify-between flex-wrap gap-2">
                               <div>
-                                <h4 className="font-extrabold text-slate-900 text-lg">{cvDraft.fullName}</h4>
-                                <p className="text-indigo-600 text-xs font-bold">{cvDraft.headline}</p>
+                                <h4 className="font-extrabold text-neutral-950 text-lg">{cvDraft.fullName}</h4>
+                                <p className="text-amber-800 text-xs font-bold">{cvDraft.headline}</p>
                               </div>
                               <div className="flex items-center gap-2">
                                 <button 
                                   onClick={() => handleCopyText(cvDraft.fullMarkdownCV, 'full-cv')}
-                                  className="bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
+                                  className="bg-white border border-neutral-200 hover:bg-neutral-50 text-neutral-700 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5"
                                 >
                                   {copiedItemKey === 'full-cv' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                                   {copiedItemKey === 'full-cv' ? 'Copied' : 'Copy Markdown'}
                                 </button>
                                 <button 
                                   onClick={() => handleDownloadTextFile(cvDraft.fullMarkdownCV, `CV_${cvDraft.fullName.replace(/\s+/g, '_')}.md`)}
-                                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md"
+                                  className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-md"
                                 >
                                   <FileDown className="w-3.5 h-3.5" />
                                   Download (.md)
@@ -2769,21 +2933,21 @@ export default function App() {
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">Core Competencies</span>
+                              <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-200">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400 block mb-2">Core Competencies</span>
                                 <div className="flex flex-wrap gap-1.5">
                                   {cvDraft.coreCompetencies.map((c, i) => (
-                                    <span key={i} className="text-xs font-bold text-slate-700 bg-white px-2.5 py-1 rounded border border-slate-200">
+                                    <span key={i} className="text-xs font-bold text-neutral-800 bg-white px-2.5 py-1 rounded border border-neutral-200">
                                       {c}
                                     </span>
                                   ))}
                                 </div>
                               </div>
-                              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">Recommended Certifications</span>
+                              <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-200">
+                                <span className="text-[10px] font-black uppercase tracking-wider text-neutral-400 block mb-2">Recommended Certifications</span>
                                 <div className="flex flex-wrap gap-1.5">
                                   {cvDraft.suggestedCertifications.map((c, i) => (
-                                    <span key={i} className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded border border-indigo-100">
+                                    <span key={i} className="text-xs font-bold text-amber-900 bg-amber-50 px-2.5 py-1 rounded border border-amber-300">
                                       {c}
                                     </span>
                                   ))}
@@ -2792,9 +2956,9 @@ export default function App() {
                             </div>
 
                             <div className="space-y-2">
-                              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Full CV Markdown Document</label>
+                              <label className="text-xs font-bold text-neutral-600 uppercase tracking-wider">Full CV Markdown Document</label>
                               <textarea 
-                                className="w-full bg-slate-900 text-slate-100 font-mono text-xs rounded-2xl p-6 leading-relaxed outline-none min-h-[380px]"
+                                className="w-full bg-neutral-950 text-neutral-100 font-mono text-xs rounded-2xl p-6 leading-relaxed outline-none min-h-[380px] border border-neutral-800"
                                 value={cvDraft.fullMarkdownCV}
                                 onChange={(e) => setCvDraft({...cvDraft, fullMarkdownCV: e.target.value})}
                               />
@@ -2808,19 +2972,19 @@ export default function App() {
                   {/* SUB-TAB 6: INTERVIEW PREP SIMULATOR */}
                   {atsSubTab === 'interview' && (
                     <div className="space-y-6">
-                      <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
+                      <div className="bg-white border border-neutral-200 p-8 rounded-3xl shadow-sm space-y-6">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                           <div>
-                            <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                              <MessageSquare className="w-5 h-5 text-indigo-600" />
+                            <h3 className="text-xl font-bold text-neutral-950 flex items-center gap-2">
+                              <MessageSquare className="w-5 h-5 text-amber-600" />
                               Interview Prep & STAR Simulator
                             </h3>
-                            <p className="text-slate-500 text-xs mt-1">High-yield interview questions and model answers crafted for South Africa enterprise IT leadership.</p>
+                            <p className="text-neutral-500 text-xs mt-1">High-yield interview questions and model answers crafted for South Africa enterprise IT leadership.</p>
                           </div>
 
                           <div className="flex items-center gap-3">
                             <select 
-                              className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-indigo-500"
+                              className="bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2 text-xs font-medium outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                               value={targetRoleForCover}
                               onChange={(e) => setTargetRoleForCover(e.target.value)}
                             >
@@ -2831,23 +2995,24 @@ export default function App() {
                             <button 
                               onClick={() => handleGenerateInterviewPrep()}
                               disabled={loadingInterview}
-                              className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 disabled:opacity-50"
+                              className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-5 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center gap-2 disabled:opacity-50 shadow-md"
                             >
-                              {loadingInterview ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                              {loadingInterview ? <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" /> : <Sparkles className="w-3.5 h-3.5 text-amber-400" />}
                               Generate Questions
                             </button>
                           </div>
                         </div>
 
                         {!interviewPrep && !loadingInterview && (
-                          <div className="bg-slate-50 border border-dashed border-slate-200 rounded-2xl p-12 text-center space-y-3">
-                            <HelpCircle className="w-10 h-10 text-indigo-400 mx-auto" />
-                            <h4 className="font-bold text-slate-800 text-sm">No Interview Package Generated Yet</h4>
-                            <p className="text-slate-500 text-xs max-w-sm mx-auto">Click "Generate Questions" to receive role-specific interview scenarios and STAR model responses.</p>
+                          <div className="bg-neutral-50 border border-dashed border-neutral-200 rounded-2xl p-12 text-center space-y-3">
+                            <HelpCircle className="w-10 h-10 text-amber-600 mx-auto" />
+                            <h4 className="font-bold text-neutral-800 text-sm">No Interview Package Generated Yet</h4>
+                            <p className="text-neutral-500 text-xs max-w-sm mx-auto">Click "Generate Questions" to receive role-specific interview scenarios and STAR model responses.</p>
                             <button 
                               onClick={() => handleGenerateInterviewPrep()}
-                              className="bg-indigo-600 text-white px-6 py-2.5 rounded-xl font-bold text-xs hover:bg-indigo-700 transition-all shadow-md"
+                              className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-6 py-2.5 rounded-xl font-bold text-xs transition-all shadow-md inline-flex items-center gap-2"
                             >
+                              <Sparkles className="w-4 h-4" />
                               Generate Instant Interview Prep
                             </button>
                           </div>
@@ -2855,20 +3020,20 @@ export default function App() {
 
                         {loadingInterview && (
                           <div className="flex flex-col items-center justify-center py-16 space-y-3">
-                            <Loader2 className="w-8 h-8 text-indigo-600 animate-spin" />
-                            <p className="text-sm font-bold text-slate-700">Simulating hiring manager interview questions...</p>
+                            <Loader2 className="w-8 h-8 text-amber-600 animate-spin" />
+                            <p className="text-sm font-bold text-neutral-700">Simulating hiring manager interview questions...</p>
                           </div>
                         )}
 
                         {interviewPrep && !loadingInterview && (
                           <div className="space-y-6">
                             <div className="flex items-center justify-between flex-wrap gap-2">
-                              <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-lg border border-indigo-100">
+                              <span className="text-xs font-bold text-amber-900 bg-amber-50 px-3 py-1 rounded-lg border border-amber-300">
                                 Target Role: {interviewPrep.targetRole}
                               </span>
                               <button 
                                 onClick={() => handleGenerateInterviewPrep()}
-                                className="text-xs font-bold text-slate-600 hover:text-indigo-600 flex items-center gap-1"
+                                className="text-xs font-bold text-neutral-600 hover:text-neutral-950 flex items-center gap-1"
                               >
                                 <RefreshCw className="w-3.5 h-3.5" /> Re-Simulate
                               </button>
@@ -2876,35 +3041,35 @@ export default function App() {
 
                             <div className="space-y-4">
                               {interviewPrep.questions.map((q, idx) => (
-                                <div key={idx} className="bg-slate-50 border border-slate-200 p-6 rounded-2xl space-y-4">
+                                <div key={idx} className="bg-neutral-50 border border-neutral-200 p-6 rounded-2xl space-y-4">
                                   <div className="flex items-start justify-between gap-4">
                                     <div className="space-y-1">
                                       <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded ${
-                                        q.category === 'Technical' ? 'bg-blue-100 text-blue-800' :
-                                        q.category === 'Behavioral' ? 'bg-purple-100 text-purple-800' :
-                                        q.category === 'Leadership' ? 'bg-emerald-100 text-emerald-800' :
-                                        'bg-amber-100 text-amber-800'
+                                        q.category === 'Technical' ? 'bg-amber-100 text-amber-900 border border-amber-200' :
+                                        q.category === 'Behavioral' ? 'bg-neutral-200 text-neutral-900' :
+                                        q.category === 'Leadership' ? 'bg-amber-50 text-amber-800 border border-amber-300' :
+                                        'bg-neutral-100 text-neutral-800'
                                       }`}>
                                         {q.category} Question
                                       </span>
-                                      <h4 className="font-extrabold text-slate-900 text-base">{q.question}</h4>
+                                      <h4 className="font-extrabold text-neutral-950 text-base">{q.question}</h4>
                                     </div>
                                     <button 
                                       onClick={() => handleCopyText(`Question: ${q.question}\n\nModel STAR Answer:\n${q.modelAnswerStar}\n\nDelivery Tip: ${q.keyTip}`, `interview-${idx}`)}
-                                      className="text-xs font-bold text-slate-600 hover:text-indigo-600 bg-white border border-slate-200 px-3 py-1.5 rounded-lg flex items-center gap-1 flex-shrink-0"
+                                      className="text-xs font-bold text-neutral-700 hover:text-neutral-950 bg-white border border-neutral-200 px-3 py-1.5 rounded-lg flex items-center gap-1 flex-shrink-0"
                                     >
                                       {copiedItemKey === `interview-${idx}` ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                                       {copiedItemKey === `interview-${idx}` ? 'Copied' : 'Copy'}
                                     </button>
                                   </div>
 
-                                  <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-2">
-                                    <span className="text-[10px] font-black uppercase text-indigo-600 tracking-wider">Model STAR Response Framework</span>
-                                    <p className="text-slate-700 text-xs leading-relaxed font-medium">{q.modelAnswerStar}</p>
+                                  <div className="bg-white p-4 rounded-xl border border-neutral-200 space-y-2">
+                                    <span className="text-[10px] font-black uppercase text-amber-800 tracking-wider">Model STAR Response Framework</span>
+                                    <p className="text-neutral-700 text-xs leading-relaxed font-medium">{q.modelAnswerStar}</p>
                                   </div>
 
-                                  <div className="flex items-center gap-2 text-xs text-amber-800 bg-amber-50 p-3 rounded-xl border border-amber-200">
-                                    <Zap className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                                  <div className="flex items-center gap-2 text-xs text-amber-900 bg-amber-50 p-3 rounded-xl border border-amber-300">
+                                    <Zap className="w-4 h-4 text-amber-700 flex-shrink-0" />
                                     <span><strong>Recruiter Delivery Tip:</strong> {q.keyTip}</span>
                                   </div>
                                 </div>
@@ -2930,26 +3095,26 @@ export default function App() {
               className="space-y-10"
             >
               <header>
-                <h2 className="text-4xl font-black tracking-tight text-slate-900">South Africa Tech Market Insights</h2>
-                <p className="text-slate-500 mt-2 font-medium text-sm">Real-time compensation benchmarks and hiring demand in Gauteng & Remote regions.</p>
+                <h2 className="text-4xl font-black tracking-tight text-neutral-950">South Africa Tech Market Insights</h2>
+                <p className="text-neutral-500 mt-2 font-medium text-sm">Real-time compensation benchmarks and hiring demand in Gauteng & Remote regions.</p>
               </header>
 
               {/* Salary Benchmarks */}
-              <section className="bg-white border border-slate-200 rounded-3xl p-8 shadow-sm space-y-6">
+              <section className="bg-white border border-neutral-200 rounded-3xl p-8 shadow-sm space-y-6">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-bold text-slate-900 flex items-center gap-3">
-                    <div className="bg-emerald-50 p-2 rounded-lg">
-                      <BarChart3 className="w-5 h-5 text-emerald-600" />
+                  <h3 className="text-xl font-bold text-neutral-950 flex items-center gap-3">
+                    <div className="bg-amber-50 p-2 rounded-xl border border-amber-200 text-amber-700">
+                      <BarChart3 className="w-5 h-5" />
                     </div>
                     Monthly Compensation Benchmarks (Gauteng / Remote)
                   </h3>
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">2026 Tech Data</span>
+                  <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest bg-neutral-100 px-3 py-1 rounded-full border border-neutral-200">2026 Tech Data</span>
                 </div>
 
                 <div className="overflow-x-auto">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="border-b border-slate-200 text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                      <tr className="border-b border-neutral-200 text-[10px] font-black uppercase text-neutral-400 tracking-widest">
                         <th className="py-4 px-4">Target Role</th>
                         <th className="py-4 px-4">Min (ZAR)</th>
                         <th className="py-4 px-4">Median (ZAR)</th>
@@ -2958,16 +3123,16 @@ export default function App() {
                         <th className="py-4 px-4">In-Demand Competencies</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100 text-sm font-medium">
+                    <tbody className="divide-y divide-neutral-100 text-sm font-medium">
                       {SOUTH_AFRICA_SALARY_BENCHMARKS.map((bench, i) => (
-                        <tr key={i} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="py-4 px-4 font-bold text-slate-900">{bench.role}</td>
-                          <td className="py-4 px-4 text-slate-600">{bench.minSalary}</td>
-                          <td className="py-4 px-4 font-bold text-indigo-600">{bench.medianSalary}</td>
-                          <td className="py-4 px-4 text-slate-600">{bench.maxSalary}</td>
+                        <tr key={i} className="hover:bg-neutral-50/80 transition-colors">
+                          <td className="py-4 px-4 font-bold text-neutral-950">{bench.role}</td>
+                          <td className="py-4 px-4 text-neutral-600">{bench.minSalary}</td>
+                          <td className="py-4 px-4 font-bold text-amber-800">{bench.medianSalary}</td>
+                          <td className="py-4 px-4 text-neutral-600">{bench.maxSalary}</td>
                           <td className="py-4 px-4">
                             <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-md border ${
-                              bench.demandTrend === 'HIGH' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-blue-50 text-blue-700 border-blue-200'
+                              bench.demandTrend === 'HIGH' ? 'bg-amber-50 text-amber-900 border-amber-300' : 'bg-neutral-100 text-neutral-700 border-neutral-200'
                             }`}>
                               {bench.demandTrend}
                             </span>
@@ -2975,7 +3140,7 @@ export default function App() {
                           <td className="py-4 px-4">
                             <div className="flex flex-wrap gap-1.5">
                               {bench.topSkills.map((sk, j) => (
-                                <span key={j} className="text-[10px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
+                                <span key={j} className="text-[10px] font-semibold text-neutral-600 bg-neutral-100 px-2 py-0.5 rounded border border-neutral-200">
                                   {sk}
                                 </span>
                               ))}
@@ -2990,30 +3155,30 @@ export default function App() {
 
               {/* Employer Ecosystem */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
-                  <h4 className="font-bold text-slate-900 flex items-center gap-2 text-sm uppercase tracking-wider">
-                    <Briefcase className="w-4 h-4 text-indigo-600" />
+                <div className="bg-white border border-neutral-200 p-8 rounded-3xl shadow-sm space-y-6">
+                  <h4 className="font-bold text-neutral-950 flex items-center gap-2 text-sm uppercase tracking-wider">
+                    <Briefcase className="w-4 h-4 text-amber-600" />
                     Top Hiring Enterprise Employers
                   </h4>
-                  <p className="text-slate-500 text-xs leading-relaxed">
+                  <p className="text-neutral-500 text-xs leading-relaxed">
                     Key corporate and telecom hiring hubs actively seeking IT Operations & Service Delivery leadership in South Africa:
                   </p>
                   <div className="space-y-3">
                     {['MTN South Africa', 'Vodacom Group', 'Amazon Web Services (AWS)', 'SAAB Grintek Defence', 'Dimension Data', 'Datacentrix', 'Entelect'].map((company, i) => (
-                      <div key={i} className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-100 text-sm font-bold text-slate-800">
+                      <div key={i} className="flex items-center justify-between p-3.5 bg-neutral-50 rounded-xl border border-neutral-200 text-sm font-bold text-neutral-900">
                         <span>{company}</span>
-                        <ArrowUpRight className="w-4 h-4 text-slate-400" />
+                        <ArrowUpRight className="w-4 h-4 text-neutral-400" />
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm space-y-6">
-                  <h4 className="font-bold text-slate-900 flex items-center gap-2 text-sm uppercase tracking-wider">
+                <div className="bg-white border border-neutral-200 p-8 rounded-3xl shadow-sm space-y-6">
+                  <h4 className="font-bold text-neutral-950 flex items-center gap-2 text-sm uppercase tracking-wider">
                     <Award className="w-4 h-4 text-amber-500" />
                     High-Value Certifications (2026)
                   </h4>
-                  <p className="text-slate-500 text-xs leading-relaxed">
+                  <p className="text-neutral-500 text-xs leading-relaxed">
                     Credentials that yield highest salary negotiation leverage for IT Operations leadership roles:
                   </p>
                   <div className="space-y-4">
@@ -3031,24 +3196,24 @@ export default function App() {
         {/* ADD CUSTOM APPLICATION MODAL */}
         <AnimatePresence>
           {showAddCustomModal && (
-            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div className="fixed inset-0 z-50 bg-neutral-950/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
               <motion.div 
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl space-y-6 border border-slate-100 my-8"
+                className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl space-y-6 border border-neutral-200 my-8"
               >
-                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div className="flex items-center justify-between pb-4 border-b border-neutral-100">
                   <div>
-                    <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                      <Plus className="w-5 h-5 text-indigo-600" />
+                    <h3 className="text-xl font-bold text-neutral-950 flex items-center gap-2">
+                      <Plus className="w-5 h-5 text-amber-600" />
                       Track External Job Application
                     </h3>
-                    <p className="text-slate-500 text-xs mt-0.5">Manually record position details, initial stage, and personal notes.</p>
+                    <p className="text-neutral-500 text-xs mt-0.5">Manually record position details, initial stage, and personal notes.</p>
                   </div>
                   <button 
                     onClick={() => setShowAddCustomModal(false)}
-                    className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100"
+                    className="text-neutral-400 hover:text-neutral-600 p-2 rounded-xl hover:bg-neutral-100"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -3056,12 +3221,12 @@ export default function App() {
 
                 <form onSubmit={handleAddCustomApplication} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Position Title *</label>
+                    <label className="text-xs font-bold text-neutral-700 uppercase tracking-wider">Position Title *</label>
                     <input 
                       type="text" 
                       required
                       placeholder="e.g. Senior Cloud & Infrastructure Manager"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                      className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
                       value={customJobTitle}
                       onChange={(e) => setCustomJobTitle(e.target.value)}
                     />
@@ -3069,22 +3234,22 @@ export default function App() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Company / Employer *</label>
+                      <label className="text-xs font-bold text-neutral-700 uppercase tracking-wider">Company / Employer *</label>
                       <input 
                         type="text" 
                         required
                         placeholder="e.g. Standard Bank SA"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                        className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
                         value={customCompany}
                         onChange={(e) => setCustomCompany(e.target.value)}
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Location</label>
+                      <label className="text-xs font-bold text-neutral-700 uppercase tracking-wider">Location</label>
                       <input 
                         type="text" 
                         placeholder="e.g. Johannesburg / Remote"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                        className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
                         value={customLocation}
                         onChange={(e) => setCustomLocation(e.target.value)}
                       />
@@ -3093,19 +3258,19 @@ export default function App() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Salary Range (ZAR)</label>
+                      <label className="text-xs font-bold text-neutral-700 uppercase tracking-wider">Salary Range (ZAR)</label>
                       <input 
                         type="text" 
                         placeholder="e.g. R950,000 - R1,200,000"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                        className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
                         value={customSalary}
                         onChange={(e) => setCustomSalary(e.target.value)}
                       />
                     </div>
                     <div className="space-y-1.5">
-                      <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Initial Application Stage</label>
+                      <label className="text-xs font-bold text-neutral-700 uppercase tracking-wider">Initial Application Stage</label>
                       <select 
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                        className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
                         value={customStatus}
                         onChange={(e) => setCustomStatus(e.target.value as ApplicationStatus)}
                       >
@@ -3118,37 +3283,37 @@ export default function App() {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Application Link / URL</label>
+                    <label className="text-xs font-bold text-neutral-700 uppercase tracking-wider">Application Link / URL</label>
                     <input 
                       type="url" 
                       placeholder="https://..."
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                      className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-2.5 text-sm font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
                       value={customLink}
                       onChange={(e) => setCustomLink(e.target.value)}
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Candidate Notes & History</label>
+                    <label className="text-xs font-bold text-neutral-700 uppercase tracking-wider">Candidate Notes & History</label>
                     <textarea 
                       placeholder="e.g. Submitted CV via HR contact on LinkedIn, follow up scheduled for Friday..."
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none min-h-[90px]"
+                      className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-3 text-sm font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none min-h-[90px]"
                       value={customNotes}
                       onChange={(e) => setCustomNotes(e.target.value)}
                     />
                   </div>
 
-                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-100">
                     <button 
                       type="button"
                       onClick={() => setShowAddCustomModal(false)}
-                      className="px-5 py-2.5 rounded-xl font-bold text-xs text-slate-500 hover:bg-slate-100"
+                      className="px-5 py-2.5 rounded-xl font-bold text-xs text-neutral-500 hover:bg-neutral-100"
                     >
                       Cancel
                     </button>
                     <button 
                       type="submit"
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold text-xs transition-all shadow-md"
+                      className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-6 py-2.5 rounded-xl font-bold text-xs transition-all shadow-md"
                     >
                       Add to Tracker
                     </button>
@@ -3162,28 +3327,28 @@ export default function App() {
         {/* EDIT CANDIDATE NOTES MODAL */}
         <AnimatePresence>
           {editingNotesJobId && (
-            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="fixed inset-0 z-50 bg-neutral-950/60 backdrop-blur-sm flex items-center justify-center p-4">
               <motion.div 
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 border border-slate-100"
+                className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4 border border-neutral-200"
               >
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <h4 className="font-extrabold text-base text-slate-900 flex items-center gap-2">
-                    <Edit3 className="w-4 h-4 text-indigo-600" />
+                <div className="flex items-center justify-between pb-3 border-b border-neutral-100">
+                  <h4 className="font-extrabold text-base text-neutral-950 flex items-center gap-2">
+                    <Edit3 className="w-4 h-4 text-amber-600" />
                     Edit Application Notes
                   </h4>
                   <button 
                     onClick={() => setEditingNotesJobId(null)}
-                    className="text-slate-400 hover:text-slate-600 p-1.5"
+                    className="text-neutral-400 hover:text-neutral-600 p-1.5"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
                 <textarea 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-sm font-medium text-slate-800 leading-relaxed outline-none focus:ring-2 focus:ring-indigo-500 min-h-[140px]"
+                  className="w-full bg-neutral-50 border border-neutral-200 rounded-2xl p-4 text-sm font-medium text-neutral-800 leading-relaxed outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 min-h-[140px]"
                   placeholder="Enter notes, interviewer feedback, salary negotiation logs..."
                   value={tempNotesText}
                   onChange={(e) => setTempNotesText(e.target.value)}
@@ -3192,13 +3357,13 @@ export default function App() {
                 <div className="flex items-center justify-end gap-3 pt-2">
                   <button 
                     onClick={() => setEditingNotesJobId(null)}
-                    className="px-4 py-2 rounded-xl text-xs font-bold text-slate-500 hover:bg-slate-100"
+                    className="px-4 py-2 rounded-xl text-xs font-bold text-neutral-500 hover:bg-neutral-100"
                   >
                     Cancel
                   </button>
                   <button 
                     onClick={() => handleSaveNotes(editingNotesJobId, tempNotesText)}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-xl text-xs font-bold transition-all shadow-md"
+                    className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-5 py-2 rounded-xl text-xs font-bold transition-all shadow-md"
                   >
                     Save Notes
                   </button>
@@ -3211,24 +3376,24 @@ export default function App() {
         {/* SAVE SEARCH MODAL */}
         <AnimatePresence>
           {showSaveSearchModal && (
-            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="fixed inset-0 z-50 bg-neutral-950/60 backdrop-blur-sm flex items-center justify-center p-4">
               <motion.div 
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6 border border-slate-100"
+                className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-6 border border-neutral-200"
               >
-                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div className="flex items-center justify-between pb-4 border-b border-neutral-100">
                   <div>
-                    <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                      <BookmarkPlus className="w-5 h-5 text-indigo-600" />
+                    <h3 className="text-xl font-bold text-neutral-950 flex items-center gap-2">
+                      <BookmarkPlus className="w-5 h-5 text-amber-600" />
                       Save Search & Alert Rules
                     </h3>
-                    <p className="text-slate-500 text-xs mt-0.5">Store current query and match filters to monitor during next sync scan.</p>
+                    <p className="text-neutral-500 text-xs mt-0.5">Store current query and match filters to monitor during next sync scan.</p>
                   </div>
                   <button 
                     onClick={() => setShowSaveSearchModal(false)}
-                    className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100"
+                    className="text-neutral-400 hover:text-neutral-600 p-2 rounded-xl hover:bg-neutral-100"
                   >
                     <X className="w-5 h-5" />
                   </button>
@@ -3236,43 +3401,43 @@ export default function App() {
 
                 <form onSubmit={handleConfirmSaveSearch} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">Search Preset Name *</label>
+                    <label className="text-xs font-bold text-neutral-700 uppercase tracking-wider">Search Preset Name *</label>
                     <input 
                       type="text" 
                       required
                       placeholder="e.g. Senior Cloud Roles - High Match"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                      className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
                       value={customSearchNameInput}
                       onChange={(e) => setCustomSearchNameInput(e.target.value)}
                     />
                   </div>
 
-                  <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 text-xs font-medium text-slate-600">
+                  <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-200 space-y-2 text-xs font-medium text-neutral-600">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Search Query:</span>
-                      <span className="font-bold text-slate-900">{searchQuery ? `"${searchQuery}"` : 'All Terms'}</span>
+                      <span className="text-neutral-400">Search Query:</span>
+                      <span className="font-bold text-neutral-950">{searchQuery ? `"${searchQuery}"` : 'All Terms'}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Match Level:</span>
-                      <span className="font-bold text-indigo-600">{filter === 'ALL' ? 'All Opportunities' : filter === 'HIGH' ? 'High Probability Only' : 'Medium Match'}</span>
+                      <span className="text-neutral-400">Match Level:</span>
+                      <span className="font-bold text-amber-800">{filter === 'ALL' ? 'All Opportunities' : filter === 'HIGH' ? 'High Probability Only' : 'Medium Match'}</span>
                     </div>
-                    <div className="flex items-center justify-between border-t border-slate-200 pt-2 mt-2">
-                      <span className="text-slate-400">Current Matching Jobs:</span>
-                      <span className="font-extrabold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded">{filteredJobs.length} Positions</span>
+                    <div className="flex items-center justify-between border-t border-neutral-200 pt-2 mt-2">
+                      <span className="text-neutral-400">Current Matching Jobs:</span>
+                      <span className="font-extrabold text-amber-900 bg-amber-50 px-2 py-0.5 rounded border border-amber-300">{filteredJobs.length} Positions</span>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-100">
                     <button 
                       type="button"
                       onClick={() => setShowSaveSearchModal(false)}
-                      className="px-5 py-2.5 rounded-xl font-bold text-xs text-slate-500 hover:bg-slate-100"
+                      className="px-5 py-2.5 rounded-xl font-bold text-xs text-neutral-500 hover:bg-neutral-100"
                     >
                       Cancel
                     </button>
                     <button 
                       type="submit"
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-bold text-xs transition-all shadow-md flex items-center gap-2"
+                      className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-6 py-2.5 rounded-xl font-bold text-xs transition-all shadow-md flex items-center gap-2"
                     >
                       <BookmarkCheck className="w-4 h-4" /> Save Search & Monitor
                     </button>
@@ -3286,34 +3451,34 @@ export default function App() {
         {/* SAVED SEARCHES & ALERTS MODAL */}
         <AnimatePresence>
           {showSavedSearchesModal && (
-            <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div className="fixed inset-0 z-50 bg-neutral-950/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
               <motion.div 
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white rounded-3xl p-8 max-w-2xl w-full shadow-2xl space-y-6 border border-slate-100 my-8"
+                className="bg-white rounded-3xl p-8 max-w-2xl w-full shadow-2xl space-y-6 border border-neutral-200 my-8"
               >
-                <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                <div className="flex items-center justify-between pb-4 border-b border-neutral-100">
                   <div>
-                    <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                      <Bookmark className="w-5 h-5 text-indigo-600" />
+                    <h3 className="text-xl font-bold text-neutral-950 flex items-center gap-2">
+                      <Bookmark className="w-5 h-5 text-amber-600" />
                       Saved Searches & Sync Notifications
                     </h3>
-                    <p className="text-slate-500 text-xs mt-0.5">Manage stored filter criteria and review alerts for newly scanned high-match jobs.</p>
+                    <p className="text-neutral-500 text-xs mt-0.5">Manage stored filter criteria and review alerts for newly scanned high-match jobs.</p>
                   </div>
                   <button 
                     onClick={() => setShowSavedSearchesModal(false)}
-                    className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100"
+                    className="text-neutral-400 hover:text-neutral-600 p-2 rounded-xl hover:bg-neutral-100"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
 
                 {savedSearches.length === 0 ? (
-                  <div className="text-center py-12 px-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200 space-y-3">
-                    <BookmarkPlus className="w-10 h-10 text-slate-400 mx-auto" />
-                    <h4 className="font-bold text-slate-700 text-sm">No Saved Searches Yet</h4>
-                    <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                  <div className="text-center py-12 px-4 bg-neutral-50 rounded-2xl border border-dashed border-neutral-200 space-y-3">
+                    <BookmarkPlus className="w-10 h-10 text-neutral-400 mx-auto" />
+                    <h4 className="font-bold text-neutral-700 text-sm">No Saved Searches Yet</h4>
+                    <p className="text-xs text-neutral-500 max-w-sm mx-auto">
                       Configure search queries or filters on the dashboard, then click "Save Search" to automatically receive alerts on next sync.
                     </p>
                     <button 
@@ -3321,7 +3486,7 @@ export default function App() {
                         setShowSavedSearchesModal(false);
                         handleOpenSaveSearchModal();
                       }}
-                      className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all inline-flex items-center gap-1.5"
+                      className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-4 py-2 rounded-xl text-xs font-bold transition-all inline-flex items-center gap-1.5 shadow-md"
                     >
                       <Plus className="w-4 h-4" /> Save Current Search
                     </button>
@@ -3334,25 +3499,25 @@ export default function App() {
                         className={`p-5 rounded-2xl border transition-all space-y-3 ${
                           s.hasNewAlert 
                             ? 'bg-amber-50/70 border-amber-300 shadow-md ring-2 ring-amber-200/50' 
-                            : 'bg-white border-slate-200 hover:border-indigo-200 shadow-xs'
+                            : 'bg-white border-neutral-200 hover:border-neutral-300 shadow-xs'
                         }`}
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <div className="flex items-center gap-2">
-                              <h4 className="font-extrabold text-slate-900 text-base">{s.name}</h4>
+                              <h4 className="font-extrabold text-neutral-950 text-base">{s.name}</h4>
                               {s.hasNewAlert && (
                                 <span className="bg-red-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider animate-pulse flex items-center gap-1">
                                   <BellRing className="w-3 h-3" /> {s.newMatchesCount || 1} New High Match!
                                 </span>
                               )}
                             </div>
-                            <p className="text-[11px] font-bold text-slate-400 mt-0.5">Created on {s.createdAt}</p>
+                            <p className="text-[11px] font-bold text-neutral-400 mt-0.5">Created on {s.createdAt}</p>
                           </div>
                           
                           <button 
                             onClick={() => handleDeleteSavedSearch(s.id)}
-                            className="text-slate-300 hover:text-red-500 p-1.5 transition-colors"
+                            className="text-neutral-300 hover:text-red-500 p-1.5 transition-colors"
                             title="Delete Saved Search"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -3361,33 +3526,29 @@ export default function App() {
 
                         {/* Search criteria tags */}
                         <div className="flex items-center gap-2 text-xs font-bold flex-wrap">
-                          <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-lg border border-slate-200">
+                          <span className="bg-neutral-100 text-neutral-700 px-3 py-1 rounded-lg border border-neutral-200">
                             Query: {s.query ? `"${s.query}"` : 'Any'}
                           </span>
                           <span className={`px-3 py-1 rounded-lg border ${
                             s.filter === 'HIGH' 
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                              ? 'bg-amber-50 text-amber-900 border-amber-300' 
                               : s.filter === 'MEDIUM' 
-                              ? 'bg-indigo-50 text-indigo-700 border-indigo-200' 
-                              : 'bg-slate-50 text-slate-600 border-slate-200'
+                              ? 'bg-neutral-100 text-neutral-800 border-neutral-300' 
+                              : 'bg-neutral-50 text-neutral-600 border-neutral-200'
                           }`}>
                             Filter: {s.filter === 'ALL' ? 'All Roles' : s.filter === 'HIGH' ? 'High Probability' : 'Medium Match'}
                           </span>
                         </div>
 
                         {/* Actions */}
-                        <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                          <span className="text-[11px] font-medium text-slate-500">
+                        <div className="flex items-center justify-between pt-2 border-t border-neutral-100">
+                          <span className="text-[11px] font-medium text-neutral-500">
                             {s.lastCheckedJobIds ? `${s.lastCheckedJobIds.length} tracked positions` : 'Auto-monitored'}
                           </span>
 
                           <button 
                             onClick={() => handleApplySavedSearch(s)}
-                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 ${
-                              s.hasNewAlert
-                                ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                            }`}
+                            className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
                           >
                             <Search className="w-3.5 h-3.5" /> Apply Filter & Clear Alert
                           </button>
@@ -3397,17 +3558,17 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                <div className="flex items-center justify-between pt-4 border-t border-neutral-100">
                   <button 
                     onClick={handleOpenSaveSearchModal}
-                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5"
+                    className="text-xs font-bold text-amber-800 hover:text-amber-950 flex items-center gap-1.5"
                   >
                     <Plus className="w-4 h-4" /> Save Current Active Filters
                   </button>
 
                   <button 
                     onClick={() => setShowSavedSearchesModal(false)}
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-bold text-xs"
+                    className="bg-neutral-100 hover:bg-neutral-200 text-neutral-700 px-5 py-2.5 rounded-xl font-bold text-xs"
                   >
                     Close
                   </button>
@@ -3420,6 +3581,7 @@ export default function App() {
         {/* AUTHENTICATION MODAL (SIGN IN / REGISTER / FIREBASE) */}
         <AuthModal 
           isOpen={showAuthModal}
+          initialMode={authMode}
           onClose={() => setShowAuthModal(false)}
           onSuccess={(user) => {
             setCurrentUser(user);
@@ -3433,6 +3595,25 @@ export default function App() {
           onClose={() => setShowCvParserModal(false)}
           onProfileParsed={handleProfileParsed}
         />
+
+        {/* Workspace Footer with Invariance Group Branding */}
+        <footer className="pt-12 pb-6 border-t border-neutral-200 text-center text-xs text-neutral-500 space-y-1.5">
+          <p className="flex items-center justify-center gap-1.5 flex-wrap">
+            <span>AI Job Search & Enterprise Recruitment Agent • Built by</span>
+            <a 
+              href="https://www.invarianceai.site/" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="font-bold text-amber-800 hover:text-amber-950 underline underline-offset-2 inline-flex items-center gap-1"
+            >
+              The Invariance Group
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          </p>
+          <p className="text-[11px] text-neutral-400">
+            Autonomous Career Intelligence Platform • POPIA & GDPR Compliant
+          </p>
+        </footer>
       </main>
     </div>
   );
@@ -3444,8 +3625,8 @@ function NavItem({ icon, label, active = false, onClick, badge }: { icon: React.
       onClick={onClick}
       className={`w-full flex items-center justify-between px-5 py-3.5 rounded-2xl font-bold transition-all text-sm ${
         active 
-          ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' 
-          : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+          ? 'bg-neutral-950 text-amber-400 border border-amber-500/30 shadow-md' 
+          : 'text-neutral-600 hover:bg-neutral-50 hover:text-neutral-950'
       }`}
     >
       <div className="flex items-center gap-3">
@@ -3454,7 +3635,7 @@ function NavItem({ icon, label, active = false, onClick, badge }: { icon: React.
       </div>
       {typeof badge === 'number' && badge > 0 && (
         <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
-          active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600'
+          active ? 'bg-amber-500/20 text-amber-300' : 'bg-neutral-100 text-neutral-600'
         }`}>
           {badge}
         </span>
@@ -3469,18 +3650,18 @@ function StatCard({ label, value, icon, active, onClick }: { label: string, valu
       onClick={onClick}
       className={`p-7 rounded-3xl border text-left transition-all group ${
         active 
-          ? 'bg-white border-indigo-600 shadow-xl shadow-indigo-50 ring-2 ring-indigo-600' 
-          : 'bg-white border-slate-200 hover:border-indigo-300 shadow-sm'
+          ? 'bg-white border-neutral-950 shadow-xl ring-2 ring-neutral-950' 
+          : 'bg-white border-neutral-200 hover:border-amber-400 shadow-sm'
       }`}
     >
       <div className="flex items-center justify-between mb-5">
-        <div className={`p-3 rounded-2xl transition-colors ${active ? 'bg-indigo-600 text-white' : 'bg-slate-50 text-slate-600 group-hover:bg-indigo-50 group-hover:text-indigo-600'}`}>
+        <div className={`p-3 rounded-2xl transition-colors ${active ? 'bg-neutral-950 text-amber-400 border border-amber-500/30' : 'bg-neutral-50 text-neutral-700 group-hover:bg-amber-50 group-hover:text-amber-800'}`}>
           {icon}
         </div>
-        <div className={`w-2.5 h-2.5 rounded-full ${active ? 'bg-indigo-600 animate-pulse' : 'bg-transparent'}`}></div>
+        <div className={`w-2.5 h-2.5 rounded-full ${active ? 'bg-amber-500 animate-pulse' : 'bg-transparent'}`}></div>
       </div>
-      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{label}</p>
-      <p className={`text-4xl font-black tracking-tight ${active ? 'text-slate-900' : 'text-slate-700'}`}>{value}</p>
+      <p className="text-[10px] font-black text-neutral-400 uppercase tracking-[0.15em] mb-1">{label}</p>
+      <p className={`text-4xl font-black tracking-tight ${active ? 'text-neutral-950' : 'text-neutral-700'}`}>{value}</p>
     </button>
   );
 }
@@ -3531,7 +3712,7 @@ function JobCard({
       animate={{ opacity: isHidden ? 0.4 : 1, y: 0 }}
       transition={{ delay: index * 0.04 }}
       className={`bg-white border rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all group ${
-        isSaved ? 'border-indigo-300 ring-1 ring-indigo-200' : 'border-slate-200 hover:border-indigo-200'
+        isSaved ? 'border-amber-400 ring-1 ring-amber-300' : 'border-neutral-200 hover:border-amber-400'
       }`}
     >
       <div className="p-8">
@@ -3540,15 +3721,15 @@ function JobCard({
           <motion.div 
             initial={{ opacity: 0, y: -5 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-6 p-4 bg-gradient-to-r from-emerald-50 via-indigo-50 to-purple-50 rounded-2xl border border-emerald-300 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs"
+            className="mb-6 p-4 bg-amber-50/80 rounded-2xl border border-amber-300 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs"
           >
             <div className="flex items-center gap-3">
-              <div className="bg-emerald-600 text-white p-2 rounded-xl flex-shrink-0 shadow-xs">
+              <div className="bg-neutral-950 text-amber-400 border border-amber-500/40 p-2 rounded-xl flex-shrink-0 shadow-xs">
                 <CheckSquare className="w-4 h-4" />
               </div>
               <div>
-                <p className="text-xs font-black text-slate-900">Opened application portal for {job.jobTitle}!</p>
-                <p className="text-[11px] text-slate-600 font-medium">Completed applying on {platform}? Click below to record it in your Application Tracker.</p>
+                <p className="text-xs font-black text-neutral-950">Opened application portal for {job.jobTitle}!</p>
+                <p className="text-[11px] text-neutral-600 font-medium">Completed applying on {platform}? Click below to record it in your Application Tracker.</p>
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
@@ -3557,14 +3738,14 @@ function JobCard({
                   if (onUpdateStatus) onUpdateStatus('applied');
                   setJustOpenedApply(false);
                 }}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-black transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
+                className="bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-4 py-2 rounded-xl text-xs font-black transition-all shadow-sm flex items-center gap-1.5 active:scale-95"
               >
                 <CheckSquare className="w-3.5 h-3.5" />
                 ✓ Mark as Applied
               </button>
               <button 
                 onClick={() => setJustOpenedApply(false)}
-                className="text-slate-400 hover:text-slate-600 text-xs font-bold px-2 py-1"
+                className="text-neutral-400 hover:text-neutral-600 text-xs font-bold px-2 py-1"
               >
                 Dismiss
               </button>
@@ -3575,46 +3756,46 @@ function JobCard({
         <div className="flex flex-col md:flex-row md:items-start justify-between gap-6 mb-6">
           <div className="space-y-3 flex-1">
             <div className="flex items-center gap-3 flex-wrap">
-              <h4 className="text-2xl font-black text-slate-900 tracking-tight group-hover:text-indigo-600 transition-colors">
+              <h4 className="text-2xl font-black text-neutral-950 tracking-tight group-hover:text-amber-700 transition-colors">
                 {job.jobTitle}
               </h4>
               <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
-                priority === 'HIGH' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                priority === 'HIGH' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-neutral-100 text-neutral-800 border border-neutral-200'
               }`}>
-                <Zap className="w-3 h-3" />
+                <Zap className="w-3 h-3 text-amber-600" />
                 {job.matchScore}% Match
               </div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-md">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-600 bg-neutral-100 border border-neutral-200 px-2.5 py-1 rounded-md">
                 {platform}
               </span>
               {isSaved && (
-                <span className="text-[10px] font-black uppercase tracking-wider text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-md flex items-center gap-1">
-                  <BookmarkCheck className="w-3 h-3 text-indigo-600" /> Saved
+                <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-50 border border-amber-300 px-2.5 py-1 rounded-md flex items-center gap-1">
+                  <BookmarkCheck className="w-3 h-3 text-amber-600" /> Saved
                 </span>
               )}
               {trackedEntry?.status === 'applied' && (
-                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md flex items-center gap-1">
+                <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md flex items-center gap-1">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Tracked: Applied
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-6 text-slate-500 text-sm font-bold flex-wrap">
+            <div className="flex items-center gap-6 text-neutral-500 text-sm font-bold flex-wrap">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
+                <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-500">
                   <Briefcase className="w-4 h-4" />
                 </div>
                 {job.company}
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
+                <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-500">
                   <MapPin className="w-4 h-4" />
                 </div>
                 {job.location}
               </div>
               {job.salary && (
-                <div className="flex items-center gap-2 text-indigo-600">
-                  <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-                    <DollarSign className="w-4 h-4" />
+                <div className="flex items-center gap-2 text-amber-800">
+                  <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center">
+                    <DollarSign className="w-4 h-4 text-amber-600" />
                   </div>
                   {job.salary}
                 </div>
@@ -3628,7 +3809,7 @@ function JobCard({
               target="_blank" 
               rel="noopener noreferrer"
               onClick={() => setJustOpenedApply(true)}
-              className="flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3.5 rounded-2xl text-xs font-black transition-all shadow-md shadow-indigo-100 active:scale-95"
+              className="flex items-center justify-center gap-2 bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-6 py-3.5 rounded-2xl text-xs font-black transition-all shadow-md active:scale-95"
             >
               Apply / View Position
               <ExternalLink className="w-4 h-4" />
@@ -3637,18 +3818,18 @@ function JobCard({
             {trackedEntry && trackedEntry.status === 'applied' ? (
               <button 
                 onClick={onNavigateToTracker}
-                className="flex items-center gap-2 bg-emerald-50 text-emerald-800 border border-emerald-300 px-5 py-3.5 rounded-2xl text-xs font-black hover:bg-emerald-100 transition-all shadow-xs"
+                className="flex items-center gap-2 bg-amber-50 text-amber-900 border border-amber-300 px-5 py-3.5 rounded-2xl text-xs font-black hover:bg-amber-100 transition-all shadow-xs"
                 title="Click to view in Application Tracker"
               >
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <CheckCircle2 className="w-4 h-4 text-amber-600" />
                 Applied ({trackedEntry.appliedDate || 'Tracked'})
               </button>
             ) : trackedEntry && (trackedEntry.status === 'interviewing' || trackedEntry.status === 'offer') ? (
               <button 
                 onClick={onNavigateToTracker}
-                className="flex items-center gap-2 bg-amber-50 text-amber-900 border border-amber-300 px-5 py-3.5 rounded-2xl text-xs font-black hover:bg-amber-100 transition-all shadow-xs"
+                className="flex items-center gap-2 bg-neutral-950 text-amber-400 border border-amber-500/40 px-5 py-3.5 rounded-2xl text-xs font-black transition-all shadow-xs"
               >
-                <Clock className="w-4 h-4 text-amber-600" />
+                <Clock className="w-4 h-4 text-amber-400" />
                 {trackedEntry.status.toUpperCase()}
               </button>
             ) : (
@@ -3657,7 +3838,7 @@ function JobCard({
                   if (onUpdateStatus) onUpdateStatus('applied');
                   setJustOpenedApply(false);
                 }}
-                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3.5 rounded-2xl text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer"
+                className="flex items-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-500 hover:to-yellow-600 text-neutral-950 px-5 py-3.5 rounded-2xl text-xs font-black transition-all shadow-md active:scale-95 cursor-pointer"
                 title="Mark this position as applied and add to tracker"
               >
                 <CheckSquare className="w-4 h-4" />
@@ -3668,9 +3849,9 @@ function JobCard({
         </div>
 
         {/* Multi-portal direct search pills */}
-        <div className="mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-wrap items-center justify-between gap-3">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-            <Globe className="w-3.5 h-3.5 text-indigo-500" /> Verify Live Postings Across Portals:
+        <div className="mb-6 p-4 bg-neutral-50 rounded-2xl border border-neutral-200 flex flex-wrap items-center justify-between gap-3">
+          <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-1.5">
+            <Globe className="w-3.5 h-3.5 text-amber-600" /> Verify Live Postings Across Portals:
           </span>
           <div className="flex items-center gap-2 flex-wrap">
             <a 
@@ -3714,7 +3895,7 @@ function JobCard({
               target="_blank" 
               rel="noopener noreferrer" 
               onClick={() => setJustOpenedApply(true)}
-              className="text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-100 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1"
+              className="text-xs font-bold text-neutral-700 bg-white border border-neutral-200 hover:bg-neutral-100 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1"
             >
               Google Jobs <Search className="w-3 h-3" />
             </a>
@@ -3722,30 +3903,30 @@ function JobCard({
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div className="bg-slate-50/70 p-6 rounded-2xl border border-slate-100">
-            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+          <div className="bg-neutral-50 p-6 rounded-2xl border border-neutral-200">
+            <h5 className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
               Match Justification
             </h5>
             <ul className="space-y-2.5">
               {job.whyMatches.map((point, i) => (
-                <li key={i} className="text-sm text-slate-600 flex items-start gap-3 leading-relaxed">
-                  <div className="mt-1.5 w-1.5 h-1.5 bg-emerald-500 rounded-full flex-shrink-0"></div>
+                <li key={i} className="text-sm text-neutral-600 flex items-start gap-3 leading-relaxed">
+                  <div className="mt-1.5 w-1.5 h-1.5 bg-amber-500 rounded-full flex-shrink-0"></div>
                   {point}
                 </li>
               ))}
             </ul>
           </div>
 
-          <div className="bg-slate-50/70 p-6 rounded-2xl border border-slate-100">
-            <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-500" />
+          <div className="bg-neutral-50 p-6 rounded-2xl border border-neutral-200">
+            <h5 className="text-[10px] font-black text-neutral-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600" />
               Identified Gaps
             </h5>
             <ul className="space-y-2.5">
               {job.keyGaps.map((gap, i) => (
-                <li key={i} className="text-sm text-slate-600 flex items-start gap-3 leading-relaxed">
-                  <div className="mt-1.5 w-1.5 h-1.5 bg-amber-500 rounded-full flex-shrink-0"></div>
+                <li key={i} className="text-sm text-neutral-600 flex items-start gap-3 leading-relaxed">
+                  <div className="mt-1.5 w-1.5 h-1.5 bg-neutral-400 rounded-full flex-shrink-0"></div>
                   {gap}
                 </li>
               ))}
@@ -3754,10 +3935,10 @@ function JobCard({
         </div>
       </div>
       
-      <div className="bg-slate-50 px-8 py-4 border-t border-slate-100 flex items-center justify-between flex-wrap gap-4">
+      <div className="bg-neutral-50 px-8 py-4 border-t border-neutral-200 flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Success Probability:</span>
-          <span className={`text-[10px] font-black uppercase tracking-widest ${priority === 'HIGH' ? 'text-emerald-600' : 'text-amber-600'}`}>
+          <span className="text-[10px] font-black text-neutral-400 uppercase tracking-widest">Success Probability:</span>
+          <span className={`text-[10px] font-black uppercase tracking-widest ${priority === 'HIGH' ? 'text-amber-800 bg-amber-100/60 px-2 py-0.5 rounded' : 'text-neutral-700'}`}>
             {job.probabilityOfSuccess}
           </span>
         </div>
@@ -3771,25 +3952,25 @@ function JobCard({
               }
             }}
             className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-colors ${
-              trackedEntry?.status === 'applied' ? 'text-emerald-600 font-extrabold' : 'text-slate-400 hover:text-emerald-600'
+              trackedEntry?.status === 'applied' ? 'text-amber-700 font-extrabold' : 'text-neutral-500 hover:text-amber-700'
             }`}
           >
-            <CheckSquare className="w-3.5 h-3.5" />
+            <CheckSquare className="w-3.5 h-3.5 text-amber-600" />
             {trackedEntry?.status === 'applied' ? 'In Tracker (Applied)' : 'Add to Application Tracker'}
           </button>
           <button 
             onClick={onToggleSave}
             className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-colors ${
-              isSaved ? 'text-indigo-600 font-extrabold' : 'text-slate-400 hover:text-indigo-600'
+              isSaved ? 'text-amber-800 font-extrabold' : 'text-neutral-500 hover:text-amber-700'
             }`}
           >
-            {isSaved ? <BookmarkCheck className="w-3.5 h-3.5 text-indigo-600" /> : <Bookmark className="w-3.5 h-3.5" />}
+            {isSaved ? <BookmarkCheck className="w-3.5 h-3.5 text-amber-600" /> : <Bookmark className="w-3.5 h-3.5" />}
             {isSaved ? 'Saved' : 'Save Job'}
           </button>
           <button 
             onClick={onToggleHide}
             className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 transition-colors ${
-              isHidden ? 'text-amber-600 font-extrabold' : 'text-slate-400 hover:text-red-600'
+              isHidden ? 'text-neutral-900 font-extrabold' : 'text-neutral-400 hover:text-red-600'
             }`}
           >
             <EyeOff className="w-3.5 h-3.5" />
@@ -3803,8 +3984,8 @@ function JobCard({
 
 function ProfileSection({ title, children }: { title: string, children: React.ReactNode }) {
   return (
-    <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm">
-      <h3 className="text-lg font-bold text-slate-900 mb-6">{title}</h3>
+    <div className="bg-white border border-neutral-200 p-8 rounded-3xl shadow-sm">
+      <h3 className="text-lg font-bold text-neutral-950 mb-6">{title}</h3>
       {children}
     </div>
   );
@@ -3813,10 +3994,10 @@ function ProfileSection({ title, children }: { title: string, children: React.Re
 function Input({ label, value, onChange }: { label: string, value: string, onChange: (v: string) => void }) {
   return (
     <div className="space-y-2">
-      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">{label}</label>
+      <label className="text-xs font-bold text-neutral-500 uppercase tracking-wider">{label}</label>
       <input 
         type="text" 
-        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all outline-none"
+        className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all outline-none"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -3826,33 +4007,32 @@ function Input({ label, value, onChange }: { label: string, value: string, onCha
 
 function AtsMetricCard({ label, score, icon, status }: { label: string, score: number, icon: React.ReactNode, status: string }) {
   return (
-    <div className="bg-white border border-slate-200 p-6 rounded-3xl shadow-sm space-y-4">
+    <div className="bg-white border border-neutral-200 p-6 rounded-3xl shadow-sm space-y-4">
       <div className="flex items-center justify-between">
-        <div className="bg-slate-50 p-2.5 rounded-2xl">{icon}</div>
-        <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">{status}</span>
+        <div className="bg-neutral-50 border border-neutral-200 p-2.5 rounded-2xl">{icon}</div>
+        <span className="text-[10px] font-bold uppercase text-neutral-400 tracking-wider">{status}</span>
       </div>
       <div>
-        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">{label}</p>
-        <p className="text-3xl font-black text-slate-900 tracking-tight mt-1">{score}%</p>
+        <p className="text-[10px] font-black uppercase text-neutral-400 tracking-widest">{label}</p>
+        <p className="text-3xl font-black text-neutral-950 tracking-tight mt-1">{score}%</p>
       </div>
-      <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+      <div className="w-full bg-neutral-100 h-2 rounded-full overflow-hidden">
         <div 
-          className="bg-indigo-600 h-full rounded-full transition-all duration-500" 
+          className="bg-amber-500 h-full rounded-full transition-all duration-500" 
           style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
         ></div>
       </div>
     </div>
   );
 }
-
 function CertBadge({ name, impact, desc }: { name: string, impact: string, desc: string }) {
   return (
-    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-start justify-between gap-4">
+    <div className="p-4 bg-neutral-50 rounded-2xl border border-neutral-200 flex items-start justify-between gap-4">
       <div>
-        <p className="font-bold text-sm text-slate-900">{name}</p>
-        <p className="text-xs text-slate-500">{desc}</p>
+        <p className="font-bold text-sm text-neutral-950">{name}</p>
+        <p className="text-xs text-neutral-500">{desc}</p>
       </div>
-      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100 flex-shrink-0">
+      <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-300 flex-shrink-0">
         {impact}
       </span>
     </div>
@@ -3890,14 +4070,14 @@ function StatusStepper({ status }: { status: ApplicationStatus }) {
 
   return (
     <div className="space-y-1.5 py-1">
-      <div className="flex items-center justify-between text-[10px] font-black uppercase text-slate-400">
+      <div className="flex items-center justify-between text-[10px] font-black uppercase text-neutral-400">
         {steps.map((step, idx) => {
           const isCurrent = idx === currentIdx;
           const isPassed = idx <= currentIdx;
           return (
             <span 
               key={step.key} 
-              className={isCurrent ? 'text-indigo-600 font-extrabold scale-105' : isPassed ? 'text-slate-700' : 'text-slate-300'}
+              className={isCurrent ? 'text-amber-700 font-extrabold scale-105' : isPassed ? 'text-neutral-900 font-bold' : 'text-neutral-300'}
             >
               {step.label}
             </span>
@@ -3912,7 +4092,7 @@ function StatusStepper({ status }: { status: ApplicationStatus }) {
             <div 
               key={step.key}
               className={`h-2 rounded-full transition-all ${
-                isCurrent ? 'bg-indigo-600 ring-2 ring-indigo-200' : isPassed ? 'bg-indigo-400' : 'bg-slate-200'
+                isCurrent ? 'bg-amber-500 ring-2 ring-amber-300' : isPassed ? 'bg-amber-400' : 'bg-neutral-200'
               }`}
             />
           );
@@ -3938,18 +4118,18 @@ function KanbanColumn({
   onEditNotes: (jobId: string, notes?: string) => void;
 }) {
   return (
-    <div className="bg-slate-100/70 p-4 rounded-3xl border border-slate-200/80 space-y-4 flex flex-col min-h-[500px]">
-      <div className="flex items-center justify-between pb-2 border-b border-slate-200">
-        <h4 className="font-extrabold text-sm text-slate-800">{title}</h4>
-        <span className="text-xs font-black bg-white px-2.5 py-1 rounded-full border border-slate-200 text-slate-700">
+    <div className="bg-neutral-50 p-4 rounded-3xl border border-neutral-200 space-y-4 flex flex-col min-h-[500px]">
+      <div className="flex items-center justify-between pb-2 border-b border-neutral-200">
+        <h4 className="font-extrabold text-sm text-neutral-950">{title}</h4>
+        <span className="text-xs font-black bg-white px-2.5 py-1 rounded-full border border-neutral-200 text-neutral-800">
           {items.length}
         </span>
       </div>
 
       <div className="space-y-3 flex-1 overflow-y-auto">
         {items.length === 0 ? (
-          <div className="text-center py-12 px-4 border border-dashed border-slate-300 rounded-2xl">
-            <p className="text-xs font-bold text-slate-400">No applications in this stage</p>
+          <div className="text-center py-12 px-4 border border-dashed border-neutral-300 rounded-2xl">
+            <p className="text-xs font-bold text-neutral-400">No applications in this stage</p>
           </div>
         ) : (
           items.map(item => (
@@ -3958,45 +4138,45 @@ function KanbanColumn({
               layout
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm hover:shadow-md transition-all space-y-3 group"
+              className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-xs hover:shadow-md transition-all space-y-3 group"
             >
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <h5 className="font-extrabold text-sm text-slate-900 leading-snug group-hover:text-indigo-600 transition-colors">
+                  <h5 className="font-extrabold text-sm text-neutral-950 leading-snug group-hover:text-amber-700 transition-colors">
                     {item.jobTitle}
                   </h5>
-                  <p className="text-xs font-bold text-slate-500 mt-0.5">{item.company}</p>
+                  <p className="text-xs font-bold text-neutral-500 mt-0.5">{item.company}</p>
                 </div>
                 <button 
                   onClick={() => onDelete(item.jobId)}
-                  className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                  className="text-neutral-300 hover:text-red-500 transition-colors p-1"
                   title="Remove"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              <div className="flex items-center gap-2 text-[10px] font-bold text-slate-500 flex-wrap">
-                <span className="bg-slate-50 border border-slate-200 px-2 py-0.5 rounded">{item.location}</span>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-neutral-500 flex-wrap">
+                <span className="bg-neutral-50 border border-neutral-200 px-2 py-0.5 rounded">{item.location}</span>
                 {item.matchScore && (
-                  <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded font-black">
+                  <span className="bg-amber-50 text-amber-900 border border-amber-300 px-2 py-0.5 rounded font-black">
                     {item.matchScore}% Match
                   </span>
                 )}
-                {item.salary && <span className="text-indigo-600 font-extrabold">{item.salary}</span>}
+                {item.salary && <span className="text-amber-800 font-extrabold">{item.salary}</span>}
               </div>
 
               {/* Status Stepper */}
               <StatusStepper status={item.status} />
 
               {/* Move Stage Selector */}
-              <div className="flex items-center justify-between gap-1 pt-2 border-t border-slate-100">
-                <span className="text-[9px] font-black uppercase text-slate-400">Move:</span>
+              <div className="flex items-center justify-between gap-1 pt-2 border-t border-neutral-100">
+                <span className="text-[9px] font-black uppercase text-neutral-400">Move:</span>
                 <div className="flex items-center gap-1">
                   {status !== 'saved' && (
                     <button 
                       onClick={() => onUpdateStatus(item.jobId, 'saved')}
-                      className="text-[10px] font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded"
+                      className="text-[10px] font-bold text-neutral-700 bg-neutral-100 hover:bg-neutral-200 px-2 py-1 rounded"
                     >
                       Saved
                     </button>
@@ -4004,7 +4184,7 @@ function KanbanColumn({
                   {status !== 'applied' && (
                     <button 
                       onClick={() => onUpdateStatus(item.jobId, 'applied')}
-                      className="text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded"
+                      className="text-[10px] font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-1 rounded"
                     >
                       Applied
                     </button>
@@ -4012,7 +4192,7 @@ function KanbanColumn({
                   {status !== 'interviewing' && (
                     <button 
                       onClick={() => onUpdateStatus(item.jobId, 'interviewing')}
-                      className="text-[10px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded"
+                      className="text-[10px] font-bold text-amber-950 bg-amber-100 hover:bg-amber-200 border border-amber-300 px-2 py-1 rounded"
                     >
                       Interview
                     </button>
@@ -4020,7 +4200,7 @@ function KanbanColumn({
                   {status !== 'offer' && (
                     <button 
                       onClick={() => onUpdateStatus(item.jobId, 'offer')}
-                      className="text-[10px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2 py-1 rounded"
+                      className="text-[10px] font-bold text-amber-400 bg-neutral-950 hover:bg-black border border-amber-500/40 px-2 py-1 rounded"
                     >
                       Offer
                     </button>
@@ -4029,13 +4209,13 @@ function KanbanColumn({
               </div>
 
               {/* Notes / Dates footer */}
-              <div className="bg-slate-50 p-2.5 rounded-xl text-[11px] font-medium text-slate-600 flex items-center justify-between gap-2">
+              <div className="bg-neutral-50 border border-neutral-200/60 p-2.5 rounded-xl text-[11px] font-medium text-neutral-600 flex items-center justify-between gap-2">
                 <p className="truncate italic">
                   {item.notes ? `"${item.notes}"` : 'No notes added'}
                 </p>
                 <button 
                   onClick={() => onEditNotes(item.jobId, item.notes)}
-                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex-shrink-0"
+                  className="text-[10px] font-bold text-amber-600 hover:text-amber-800 flex-shrink-0"
                 >
                   <Edit3 className="w-3 h-3" />
                 </button>
