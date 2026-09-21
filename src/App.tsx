@@ -1474,7 +1474,7 @@ export default function App() {
                     <Search className="w-8 h-8 text-amber-600 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                   </div>
                   <div className="text-center space-y-1">
-                    <p className="text-xl font-extrabold text-neutral-950">Scanning South Africa Tech Market</p>
+                    <p className="text-xl font-extrabold text-neutral-950">Scanning South African & Remote Job Markets</p>
                     <p className="text-sm text-neutral-500">Aggregating LinkedIn, PNet, Careers24, and Indeed listings...</p>
                   </div>
                 </div>
@@ -3160,8 +3160,8 @@ export default function App() {
               className="space-y-10"
             >
               <header>
-                <h2 className="text-4xl font-black tracking-tight text-neutral-950">South Africa Tech Market Insights</h2>
-                <p className="text-neutral-500 mt-2 font-medium text-sm">Real-time compensation benchmarks and hiring demand in Gauteng & Remote regions.</p>
+                <h2 className="text-4xl font-black tracking-tight text-neutral-950">South Africa & Global Market Insights</h2>
+                <p className="text-neutral-500 mt-2 font-medium text-sm">Real-time compensation benchmarks and hiring demand across diverse industries, Gauteng & Remote regions.</p>
               </header>
 
               {/* Salary Benchmarks */}
@@ -3173,7 +3173,7 @@ export default function App() {
                     </div>
                     Monthly Compensation Benchmarks (Gauteng / Remote)
                   </h3>
-                  <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest bg-neutral-100 px-3 py-1 rounded-full border border-neutral-200">2026 Tech Data</span>
+                  <span className="text-xs font-bold text-neutral-500 uppercase tracking-widest bg-neutral-100 px-3 py-1 rounded-full border border-neutral-200">2026 Industry Data</span>
                 </div>
 
                 <div className="overflow-x-auto">

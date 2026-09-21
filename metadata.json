@@ -1,6 +1,6 @@
 {
   "name": "AI Job Search & Career Copilot",
-  "description": "An intelligent, shareable job search agent, ATS resume scanner, and career matching engine for job seekers across South Africa and remote markets.",
+  "description": "An intelligent, shareable job search agent, ATS resume scanner, and career matching engine for all job seekers across all industries in South Africa and remote global markets.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

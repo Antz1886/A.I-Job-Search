@@ -95,7 +95,7 @@ export function LandingPage({ onOpenAuth, onExploreDemo }: LandingPageProps) {
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold shadow-xs"
           >
             <Sparkles className="w-3.5 h-3.5 text-amber-600" />
-            <span>Engineered for South African Tech & Global Remote Markets</span>
+            <span>Engineered for All Job Seekers Across South Africa & Global Remote Markets</span>
           </motion.div>
 
           {/* Headline */}
@@ -295,7 +295,7 @@ export function LandingPage({ onOpenAuth, onExploreDemo }: LandingPageProps) {
               </div>
               <h4 className="text-lg font-bold text-neutral-950">ZAR Salary Benchmarks</h4>
               <p className="text-xs text-neutral-600 leading-relaxed">
-                Real-world South African market compensation ranges (ZAR) across IT Operations, Software Engineering, DevOps, Product, and Management.
+                Real-world South African market compensation ranges (ZAR) across Operations, Finance, Healthcare, Engineering, Sales, Marketing, and all professions.
               </p>
             </div>
 
@@ -325,9 +325,9 @@ export function LandingPage({ onOpenAuth, onExploreDemo }: LandingPageProps) {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative">
           <div className="bg-white border border-neutral-200 p-8 rounded-3xl relative space-y-4 shadow-sm hover:border-amber-300 transition-all">
             <div className="text-4xl font-black text-amber-500/30">01</div>
-            <h4 className="text-lg font-bold text-neutral-950">Create Account & Set Target</h4>
+            <h4 className="text-lg font-bold text-neutral-950">Create Account & Upload CV</h4>
             <p className="text-xs text-neutral-600 leading-relaxed">
-              Sign up in 30 seconds. Choose from popular career presets (IT Operations, Engineering, Product) or paste your CV to auto-extract your background.
+              Sign up in 30 seconds. Upload or paste your CV to auto-extract your background, career achievements, and target roles across any industry.
             </p>
           </div>
 

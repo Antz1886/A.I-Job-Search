@@ -44,9 +44,9 @@ export function OnboardingSetup({ currentUser, onComplete, onSignOut }: Onboardi
   const [error, setError] = useState<string | null>(null);
 
   const processingSteps = [
-    { title: "Analyzing CV & Career History", desc: "Extracting work experience, senior achievements, and technical stack..." },
-    { title: "Mapping Target Roles & ZAR Comp", desc: "Aligning seniority levels with South African market benchmarks..." },
-    { title: "Searching Verified Vacancies", desc: "Scanning live openings across LinkedIn, PNet, Indeed & OfferZen..." },
+    { title: "Analyzing CV & Career History", desc: "Extracting work experience, career achievements, and core skills..." },
+    { title: "Mapping Target Roles & Compensation", desc: "Aligning seniority levels with South African & global market benchmarks..." },
+    { title: "Searching Verified Vacancies", desc: "Scanning live openings across LinkedIn, PNet, Indeed & Careers24..." },
     { title: "Calculating ATS Match Probabilities", desc: "Customizing application pitch and populating your personal dashboard..." }
   ];
 
@@ -232,7 +232,7 @@ ITIL v4 Foundation & Managing Professional, SLA Governance, Incident & Problem M
                 Analyzing Your CV & Scouting Vacancies
               </h2>
               <p className="text-neutral-500 text-sm max-w-md mx-auto mb-8">
-                Our Gemini intelligence engine is reviewing your credentials, calibrating ATS keywords, and scanning verified roles in South Africa.
+                Our Gemini intelligence engine is reviewing your credentials, calibrating ATS keywords, and scanning verified opportunities across South Africa and remote global markets.
               </p>
 
               {/* Progress Steps */}
@@ -331,7 +331,7 @@ ITIL v4 Foundation & Managing Professional, SLA Governance, Incident & Problem M
                     rows={8}
                     value={cvText}
                     onChange={(e) => setCvText(e.target.value)}
-                    placeholder="e.g. John Doe, Senior Software Engineer in Johannesburg... Key Skills: React, Node.js, AWS... 6+ years experience building fintech platforms..."
+                    placeholder="e.g. Jane Doe, Senior Operations Lead / Financial Specialist / Marketing Manager / Software Engineer in Johannesburg... Key Skills: Strategic Planning, Stakeholder Management, Team Leadership... 6+ years experience..."
                     className="w-full p-4 rounded-2xl border border-neutral-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-xs sm:text-sm text-neutral-900 placeholder:text-neutral-400 font-mono transition-all outline-none resize-y"
                   />
                   <div className="flex items-center justify-between text-[11px] text-neutral-400">

@@ -755,83 +755,91 @@ ${(profile?.keySkills || []).map((s: string) => `* ${s}`).join("\n")}
 
 export const SOUTH_AFRICA_SALARY_BENCHMARKS: SalaryBenchmark[] = [
   {
-    role: "IT Operations Manager",
-    minSalary: "R40,000",
+    role: "Financial Accountant / CA(SA)",
+    minSalary: "R45,000",
+    medianSalary: "R62,000",
+    maxSalary: "R85,000",
+    demandTrend: "HIGH",
+    topSkills: ["IFRS Reporting", "Financial Modeling", "Tax Compliance", "ERP (SAP/Oracle)"]
+  },
+  {
+    role: "Human Resources / People Operations Manager",
+    minSalary: "R38,000",
     medianSalary: "R52,000",
+    maxSalary: "R70,000",
+    demandTrend: "HIGH",
+    topSkills: ["B-BBEE Compliance", "Talent Acquisition", "Employee Relations", "Workday HRIS"]
+  },
+  {
+    role: "B2B Sales / Key Account Executive",
+    minSalary: "R35,000",
+    medianSalary: "R50,000",
+    maxSalary: "R80,000",
+    demandTrend: "HIGH",
+    topSkills: ["Pipeline Closing", "Contract Negotiation", "Enterprise CRM", "Client Retention"]
+  },
+  {
+    role: "Digital Marketing & Brand Lead",
+    minSalary: "R36,000",
+    medianSalary: "R48,000",
     maxSalary: "R68,000",
     demandTrend: "HIGH",
-    topSkills: ["Cloud Infrastructure", "Incident Mgmt", "SLA Enforcement", "ITIL v4"]
+    topSkills: ["Omnichannel Strategy", "Paid Acquisition (ROAS)", "Content Lifecycle", "GA4 Analytics"]
   },
   {
-    role: "Service Delivery Manager",
+    role: "Supply Chain & Logistics Lead",
     minSalary: "R38,000",
-    medianSalary: "R48,000",
-    maxSalary: "R62,000",
+    medianSalary: "R52,000",
+    maxSalary: "R72,000",
     demandTrend: "HIGH",
-    topSkills: ["Stakeholder Relations", "Vendor Governance", "KPI Tracking", "ServiceNow"]
+    topSkills: ["Freight Optimization", "Demand Planning", "SAP MM/WM", "Vendor Governance"]
   },
   {
-    role: "Senior Full Stack Software Engineer",
+    role: "Healthcare Operations / Clinical Administrator",
+    minSalary: "R40,000",
+    medianSalary: "R54,000",
+    maxSalary: "R72,000",
+    demandTrend: "HIGH",
+    topSkills: ["Clinical Governance", "Health Compliance (HPCSA)", "Patient Care Workflows", "EMR Systems"]
+  },
+  {
+    role: "Operations & Service Delivery Manager",
+    minSalary: "R40,000",
+    medianSalary: "R55,000",
+    maxSalary: "R75,000",
+    demandTrend: "HIGH",
+    topSkills: ["Process Optimization", "SLA Governance", "Cross-Functional Leadership", "Resource Allocation"]
+  },
+  {
+    role: "Senior Software Engineer (Full Stack)",
     minSalary: "R55,000",
-    medianSalary: "R72,000",
-    maxSalary: "R95,000",
+    medianSalary: "R75,000",
+    maxSalary: "R98,000",
     demandTrend: "HIGH",
-    topSkills: ["React/TypeScript", "Node.js", "PostgreSQL", "Cloud Architecture"]
+    topSkills: ["React/TypeScript", "Node.js / Python", "Cloud Architecture", "System Design"]
   },
   {
-    role: "Cloud & DevOps Specialist",
-    minSalary: "R50,000",
-    medianSalary: "R68,000",
-    maxSalary: "R90,000",
-    demandTrend: "HIGH",
-    topSkills: ["Kubernetes", "AWS / Azure", "Terraform", "CI/CD Automation"]
-  },
-  {
-    role: "Data Analyst & BI Specialist",
+    role: "Data Analyst & Business Intelligence Specialist",
     minSalary: "R35,000",
     medianSalary: "R48,000",
     maxSalary: "R65,000",
     demandTrend: "HIGH",
-    topSkills: ["SQL", "Power BI", "Python (Pandas)", "Data Modeling"]
-  },
-  {
-    role: "Technical Product Manager",
-    minSalary: "R48,000",
-    medianSalary: "R62,000",
-    maxSalary: "R82,000",
-    demandTrend: "HIGH",
-    topSkills: ["Agile/Scrum", "User Journey", "Jira", "Stakeholder Alignment"]
-  },
-  {
-    role: "Technical Account Manager",
-    minSalary: "R35,000",
-    medianSalary: "R45,000",
-    maxSalary: "R58,000",
-    demandTrend: "HIGH",
-    topSkills: ["Enterprise Support", "Client Escalations", "Telecom Networks", "Cloud Adoption"]
-  },
-  {
-    role: "IT Manager (Senior)",
-    minSalary: "R45,000",
-    medianSalary: "R58,000",
-    maxSalary: "R75,000",
-    demandTrend: "STABLE",
-    topSkills: ["IT Strategy", "Budget Control", "Security Compliance", "Team Leadership"]
-  },
-  {
-    role: "Support Team Lead (Senior)",
-    minSalary: "R32,000",
-    medianSalary: "R42,000",
-    maxSalary: "R52,000",
-    demandTrend: "STABLE",
-    topSkills: ["Shift Roster Mgmt", "Tier 2/3 Support", "Ticketing SLA", "Coaching"]
+    topSkills: ["SQL Queries", "Power BI", "Data Modeling", "Executive Dashboards"]
   },
   {
     role: "Customer Success / CX Manager",
-    minSalary: "R30,000",
-    medianSalary: "R42,000",
-    maxSalary: "R55,000",
+    minSalary: "R32,000",
+    medianSalary: "R45,000",
+    maxSalary: "R60,000",
     demandTrend: "HIGH",
-    topSkills: ["Zendesk/Salesforce", "Churn Reduction", "Account Onboarding", "NPS Growth"]
+    topSkills: ["Zendesk / Salesforce", "Churn Mitigation", "Customer Journey", "NPS Growth"]
+  },
+  {
+    role: "Executive Operations / General Manager",
+    minSalary: "R65,000",
+    medianSalary: "R90,000",
+    maxSalary: "R130,000",
+    demandTrend: "HIGH",
+    topSkills: ["P&L Management", "Strategic Execution", "Change Management", "Board Governance"]
   }
 ];
