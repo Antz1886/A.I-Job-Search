@@ -10,7 +10,11 @@ import {
   AlertCircle, 
   CheckCircle2, 
   Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  ExternalLink,
+  Copy,
+  Check,
+  Globe
 } from 'lucide-react';
 import { 
   loginWithEmail, 
@@ -18,6 +22,7 @@ import {
   loginWithGoogle, 
   resetPassword 
 } from '../services/firebase';
+import firebaseConfig from '../../firebase-applet-config.json';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -33,21 +38,61 @@ export function AuthModal({ isOpen, onClose, onSuccess, initialMode = 'signup' }
   const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [domainErrorInfo, setDomainErrorInfo] = useState<{ host: string; settingsUrl: string } | null>(null);
+  const [copiedHost, setCopiedHost] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (isOpen && initialMode) {
       setMode(initialMode);
       setError(null);
+      setDomainErrorInfo(null);
       setSuccessMsg(null);
     }
   }, [isOpen, initialMode]);
 
   if (!isOpen) return null;
 
+  const handleCopyHost = (host: string) => {
+    navigator.clipboard.writeText(host);
+    setCopiedHost(true);
+    setTimeout(() => setCopiedHost(false), 2000);
+  };
+
+  const processAuthError = (err: any) => {
+    console.error("Firebase auth error:", err);
+    const code = err?.code || '';
+    const rawMsg = err?.message || '';
+
+    if (code === 'auth/unauthorized-domain' || rawMsg.includes('auth/unauthorized-domain')) {
+      const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'your-app.vercel.app';
+      const projectId = firebaseConfig?.projectId || 'gen-lang-client-0453612338';
+      const settingsUrl = `https://console.firebase.google.com/project/${projectId}/authentication/settings`;
+      
+      setDomainErrorInfo({ host: currentHost, settingsUrl });
+      setError(`Your current domain (${currentHost}) is not authorized in Firebase Authentication.`);
+      return;
+    }
+
+    setDomainErrorInfo(null);
+
+    let msg = rawMsg || 'Authentication failed. Please try again.';
+    if (code === 'auth/invalid-credential' || rawMsg.includes('auth/invalid-credential') || rawMsg.includes('auth/wrong-password') || rawMsg.includes('auth/user-not-found')) {
+      msg = 'Invalid email or password. Please check your credentials or create a new account.';
+    } else if (code === 'auth/email-already-in-use' || rawMsg.includes('auth/email-already-in-use')) {
+      msg = 'This email is already registered. Please sign in instead.';
+    } else if (code === 'auth/popup-closed-by-user' || rawMsg.includes('auth/popup-closed-by-user')) {
+      msg = 'Google sign-in popup was closed before completing.';
+    } else if (code === 'auth/popup-blocked' || rawMsg.includes('auth/popup-blocked')) {
+      msg = 'Sign-in popup was blocked by your browser. Please allow popups for this site.';
+    }
+    setError(msg);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setDomainErrorInfo(null);
     setSuccessMsg(null);
     setLoading(true);
 
@@ -83,16 +128,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, initialMode = 'signup' }
         setSuccessMsg('Password reset instructions sent to your email.');
       }
     } catch (err: any) {
-      console.error(err);
-      let msg = err.message || 'Authentication failed. Please try again.';
-      if (msg.includes('auth/invalid-credential') || msg.includes('auth/wrong-password') || msg.includes('auth/user-not-found')) {
-        msg = 'Invalid email or password. Please check your credentials or create a new account.';
-      } else if (msg.includes('auth/email-already-in-use')) {
-        msg = 'This email is already registered. Please sign in instead.';
-      } else if (msg.includes('auth/popup-closed-by-user')) {
-        msg = 'Google sign-in popup was closed before completing.';
-      }
-      setError(msg);
+      processAuthError(err);
     } finally {
       setLoading(false);
     }
@@ -100,6 +136,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, initialMode = 'signup' }
 
   const handleGoogleSignIn = async () => {
     setError(null);
+    setDomainErrorInfo(null);
     setSuccessMsg(null);
     setLoading(true);
     try {
@@ -110,8 +147,7 @@ export function AuthModal({ isOpen, onClose, onSuccess, initialMode = 'signup' }
         onClose();
       }, 800);
     } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Google sign-in could not be completed.');
+      processAuthError(err);
     } finally {
       setLoading(false);
     }
@@ -180,8 +216,65 @@ export function AuthModal({ isOpen, onClose, onSuccess, initialMode = 'signup' }
         )}
 
         {/* Form Body */}
-        <div className="p-6 space-y-4">
-          {error && (
+        <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+          {domainErrorInfo ? (
+            <div className="bg-amber-500/10 border border-amber-500/40 rounded-2xl p-4 text-xs space-y-3">
+              <div className="flex items-start gap-2.5">
+                <Globe className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <h4 className="font-bold text-neutral-900 text-sm">Authorize This Domain in Firebase</h4>
+                  <p className="text-neutral-600 text-xs mt-1 leading-relaxed">
+                    Firebase Authentication requires every deployment domain (like Vercel) to be allowlisted before users can authenticate.
+                  </p>
+                </div>
+              </div>
+
+              {/* Hostname with copy button */}
+              <div className="bg-white border border-amber-200 rounded-xl p-2.5 flex items-center justify-between gap-2 shadow-xs">
+                <div className="truncate">
+                  <span className="text-[10px] uppercase font-bold text-neutral-400 block">Current Domain</span>
+                  <span className="font-mono text-xs text-neutral-900 font-semibold">{domainErrorInfo.host}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyHost(domainErrorInfo.host)}
+                  className="px-2.5 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-[11px] font-bold rounded-lg flex items-center gap-1.5 transition-colors"
+                >
+                  {copiedHost ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="text-emerald-700">Copied</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Quick instructions */}
+              <div className="text-[11px] text-neutral-700 space-y-1 pl-1">
+                <p className="font-bold text-neutral-800">Quick Fix (30 seconds):</p>
+                <ol className="list-decimal list-inside space-y-1 text-neutral-600">
+                  <li>Open the Firebase Authentication Settings.</li>
+                  <li>Scroll down to <strong>Authorized domains</strong> and click <strong>Add domain</strong>.</li>
+                  <li>Paste <code className="bg-amber-100/70 text-amber-900 px-1 py-0.5 rounded font-mono text-[10px]">{domainErrorInfo.host}</code> and save.</li>
+                </ol>
+              </div>
+
+              <a
+                href={domainErrorInfo.settingsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full inline-flex items-center justify-center gap-2 bg-neutral-950 hover:bg-black text-amber-400 font-bold text-xs py-2.5 px-3 rounded-xl border border-amber-500/40 shadow-xs transition-colors"
+              >
+                <span>Open Firebase Auth Settings</span>
+                <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+              </a>
+            </div>
+          ) : error && (
             <div className="bg-rose-50 border border-rose-200 text-rose-700 p-3.5 rounded-2xl flex items-start gap-2.5 text-xs font-medium">
               <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
               <span>{error}</span>
