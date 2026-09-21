@@ -112,17 +112,43 @@ export async function initializeUserData(
 export async function saveUserProfileToCloud(
   userId: string,
   candidateProfile: CandidateProfile,
-  extra?: { activePresetId?: string }
+  extra?: { activePresetId?: string; onboardingCompleted?: boolean }
 ): Promise<void> {
   try {
     const userDocRef = doc(db, "users", userId);
     await setDoc(userDocRef, {
       candidateProfile,
       activePresetId: extra?.activePresetId || "custom",
+      onboardingCompleted: extra?.onboardingCompleted ?? true,
       updatedAt: new Date().toISOString()
     }, { merge: true });
   } catch (err) {
     console.warn("Error saving profile to Firestore:", err);
+  }
+}
+
+export interface UserCloudData {
+  candidateProfile: CandidateProfile | null;
+  onboardingCompleted: boolean;
+  activePresetId?: string;
+}
+
+export async function loadUserCloudData(userId: string): Promise<UserCloudData | null> {
+  try {
+    const userDocRef = doc(db, "users", userId);
+    const snap = await getDoc(userDocRef);
+    if (snap.exists()) {
+      const data = snap.data();
+      return {
+        candidateProfile: (data?.candidateProfile as CandidateProfile) || null,
+        onboardingCompleted: !!data?.onboardingCompleted,
+        activePresetId: data?.activePresetId
+      };
+    }
+    return null;
+  } catch (err) {
+    console.warn("Error loading user cloud data from Firestore:", err);
+    return null;
   }
 }
 

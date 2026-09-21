@@ -84,6 +84,7 @@ import {
   logoutUser,
   saveUserProfileToCloud,
   loadUserProfileFromCloud,
+  loadUserCloudData,
   saveJobToCloud,
   removeJobFromCloud,
   loadSavedJobsFromCloud,
@@ -95,6 +96,7 @@ import type { User as FirebaseUser } from 'firebase/auth';
 import { AuthModal } from './components/AuthModal';
 import { CVParserModal } from './components/CVParserModal';
 import { LandingPage } from './components/LandingPage';
+import { OnboardingSetup } from './components/OnboardingSetup';
 import { 
   DailyReport, 
   JobMatch, 
@@ -112,6 +114,15 @@ import {
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewType>('dashboard');
   
+  // Onboarding completion status for first-time user CV setup
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('onboarding_completed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
   // LocalStorage-backed state persistence
   const [profile, setProfile] = useState<CandidateProfile>(() => {
     try {
@@ -354,14 +365,34 @@ export default function App() {
       if (user) {
         setSyncStatus('syncing');
         try {
-          // 1. Fetch user profile from Firestore
-          const cloudProfile = await loadUserProfileFromCloud(user.uid);
-          if (cloudProfile) {
-            setProfile(cloudProfile);
-            localStorage.setItem('candidate_profile', JSON.stringify(cloudProfile));
+          // 1. Fetch user onboarding status & profile from Firestore
+          const cloudData = await loadUserCloudData(user.uid);
+          const localCompleted = localStorage.getItem(`onboarding_completed_${user.uid}`) === 'true';
+          const isCompleted = cloudData ? cloudData.onboardingCompleted : localCompleted;
+
+          if (!isCompleted) {
+            // First time user! There should NOT be any job data but a setup process for user to parse cv
+            setOnboardingCompleted(false);
+            setReport(null); // Ensure 0 job data until CV parsing setup is completed
+            setSavedJobIds([]);
+            setTrackerEntries({});
+            try {
+              localStorage.removeItem('cached_report');
+              localStorage.removeItem(`cached_report_${user.uid}`);
+            } catch {}
           } else {
-            // Initial backup to user's new Firestore account
-            await saveUserProfileToCloud(user.uid, profile);
+            setOnboardingCompleted(true);
+            if (cloudData?.candidateProfile) {
+              setProfile(cloudData.candidateProfile);
+              localStorage.setItem('candidate_profile', JSON.stringify(cloudData.candidateProfile));
+            }
+            // Load user-specific cached report if available
+            const userCached = localStorage.getItem(`cached_report_${user.uid}`) || localStorage.getItem('cached_report');
+            if (userCached) {
+              try {
+                setReport(sanitizeReportLinks(JSON.parse(userCached)));
+              } catch {}
+            }
           }
 
           // 2. Fetch saved jobs from Firestore
@@ -409,9 +440,13 @@ export default function App() {
         setSyncStatus('guest');
         setSavedJobIds([]);
         setTrackerEntries({});
+        setReport(null);
+        setOnboardingCompleted(false);
         try {
           localStorage.removeItem('saved_job_ids');
           localStorage.removeItem('tracked_applications');
+          localStorage.removeItem('cached_report');
+          localStorage.removeItem('onboarding_completed');
         } catch {}
       }
     });
@@ -424,15 +459,42 @@ export default function App() {
       await logoutUser();
       setSavedJobIds([]);
       setTrackerEntries({});
+      setReport(null);
+      setOnboardingCompleted(false);
       setIsPreviewDemo(false);
       try {
         localStorage.removeItem('saved_job_ids');
         localStorage.removeItem('tracked_applications');
+        localStorage.removeItem('cached_report');
+        localStorage.removeItem('onboarding_completed');
       } catch {}
       triggerTrackerToast('Successfully signed out.');
     } catch (err: any) {
       console.error(err);
     }
+  };
+
+  const handleCompleteOnboarding = async (newProf: CandidateProfile, newReport: DailyReport) => {
+    setProfile(newProf);
+    setReport(newReport);
+    setOnboardingCompleted(true);
+
+    try {
+      localStorage.setItem('candidate_profile', JSON.stringify(newProf));
+      localStorage.setItem('cached_report', JSON.stringify(newReport));
+      localStorage.setItem('onboarding_completed', 'true');
+      if (currentUser) {
+        localStorage.setItem(`onboarding_completed_${currentUser.uid}`, 'true');
+        localStorage.setItem(`cached_report_${currentUser.uid}`, JSON.stringify(newReport));
+        setSyncStatus('syncing');
+        await saveUserProfileToCloud(currentUser.uid, newProf, { onboardingCompleted: true });
+        setSyncStatus('synced');
+      }
+    } catch (e) {
+      console.warn("Storage warning in onboarding complete:", e);
+    }
+
+    triggerTrackerToast(`Setup complete! Welcome ${newProf.name}, your dashboard has been populated with ${newReport.summary.totalJobsFound} opportunities.`);
   };
 
   const handleSelectPreset = async (presetId: string) => {
@@ -1063,7 +1125,10 @@ export default function App() {
             setAuthMode(mode);
             setShowAuthModal(true);
           }}
-          onExploreDemo={() => setIsPreviewDemo(true)}
+          onExploreDemo={() => {
+            setIsPreviewDemo(true);
+            setOnboardingCompleted(true);
+          }}
         />
         <AuthModal 
           isOpen={showAuthModal}
@@ -1075,6 +1140,17 @@ export default function App() {
           }}
         />
       </>
+    );
+  }
+
+  // Once user signed in first time, there should not be any job data but a setup process for user to parse cv and once this is done should the dashboard be populated
+  if (currentUser && !onboardingCompleted) {
+    return (
+      <OnboardingSetup 
+        currentUser={currentUser}
+        onComplete={handleCompleteOnboarding}
+        onSignOut={handleLogout}
+      />
     );
   }
 
@@ -1308,12 +1384,18 @@ export default function App() {
 
             {/* Resume Parser Button */}
             <button
-              onClick={() => setShowCvParserModal(true)}
+              onClick={() => {
+                if (currentUser) {
+                  setOnboardingCompleted(false);
+                } else {
+                  setShowCvParserModal(true);
+                }
+              }}
               className="bg-neutral-100 hover:bg-neutral-200 text-neutral-900 px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border border-neutral-200"
               title="Parse resume plain text into candidate parameters"
             >
-              <Wand2 className="w-3.5 h-3.5 text-amber-600" />
-              Parse My CV
+              <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+              CV Setup Wizard
             </button>
 
             {/* Auth CTA */}
@@ -1424,29 +1506,12 @@ export default function App() {
                       Run AI Job Search (1-Click)
                     </button>
                     <button
-                      onClick={() => setShowCvParserModal(true)}
+                      onClick={() => setOnboardingCompleted(false)}
                       className="bg-neutral-100 hover:bg-neutral-200 text-neutral-900 font-bold text-xs px-5 py-3.5 rounded-xl border border-neutral-200 transition-all flex items-center gap-2"
                     >
-                      <Wand2 className="w-4 h-4 text-amber-600" />
-                      Parse My CV
+                      <Sparkles className="w-4 h-4 text-amber-600" />
+                      Parse My CV (Setup Wizard)
                     </button>
-                  </div>
-
-                  <div className="pt-6 border-t border-neutral-100">
-                    <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider mb-3">
-                      Or select a career role preset:
-                    </p>
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                      {CAREER_PRESETS.map(p => (
-                        <button
-                          key={p.id}
-                          onClick={() => handleSelectPreset(p.id)}
-                          className="text-xs font-semibold px-3 py-1.5 rounded-xl bg-neutral-50 hover:bg-amber-50 text-neutral-700 hover:text-amber-800 border border-neutral-200 hover:border-amber-300 transition-all"
-                        >
-                          {p.title || p.name}
-                        </button>
-                      ))}
-                    </div>
                   </div>
                 </div>
               )}
@@ -1458,7 +1523,7 @@ export default function App() {
                     <StatCard 
                       label="Total Opportunities" 
                       value={summaryCounts.total} 
-                      icon={<Search className="w-6 h-6 text-blue-600" />}
+                      icon={<Search className="w-6 h-6 text-amber-600" />}
                       active={filter === 'ALL'}
                       onClick={() => setFilter('ALL')}
                     />
