@@ -48,6 +48,8 @@ import {
   ListChecks,
   FileDown,
   Calendar,
+  Building2,
+  Info,
   Edit3,
   Clock,
   CheckSquare,
@@ -76,8 +78,13 @@ import {
   SOUTH_AFRICA_SALARY_BENCHMARKS,
   getPlatformSearchUrls,
   resolveDirectOrSearchUrl,
-  sanitizeReportLinks
+  sanitizeReportLinks,
+  validateJobUrlIntegrity,
+  getPlatformLabel,
+  stripPdfBytecode,
+  type JobUrlIntegrityResult
 } from './services/geminiService';
+import { sanitizeCandidateProfile } from './services/industryIntelligence';
 import { 
   auth,
   onAuthStateChanged,
@@ -127,11 +134,26 @@ export default function App() {
   const [profile, setProfile] = useState<CandidateProfile>(() => {
     try {
       const saved = localStorage.getItem('candidate_profile');
-      return saved ? JSON.parse(saved) : CANDIDATE_PROFILE;
+      return saved ? sanitizeCandidateProfile(JSON.parse(saved)) : CANDIDATE_PROFILE;
     } catch {
       return CANDIDATE_PROFILE;
     }
   });
+
+  // Self-heal and purge any legacy PDF stream bytecode from candidate profile
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('candidate_profile');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const cleaned = sanitizeCandidateProfile(parsed);
+        if (JSON.stringify(cleaned) !== JSON.stringify(parsed)) {
+          setProfile(cleaned);
+          localStorage.setItem('candidate_profile', JSON.stringify(cleaned));
+        }
+      }
+    } catch {}
+  }, []);
 
   const [report, setReport] = useState<DailyReport | null>(() => {
     try {
@@ -383,8 +405,9 @@ export default function App() {
           } else {
             setOnboardingCompleted(true);
             if (cloudData?.candidateProfile) {
-              setProfile(cloudData.candidateProfile);
-              localStorage.setItem('candidate_profile', JSON.stringify(cloudData.candidateProfile));
+              const cleanedProfile = sanitizeCandidateProfile(cloudData.candidateProfile);
+              setProfile(cleanedProfile);
+              localStorage.setItem('candidate_profile', JSON.stringify(cleanedProfile));
             }
             // Load user-specific cached report if available
             const userCached = localStorage.getItem(`cached_report_${user.uid}`) || localStorage.getItem('cached_report');
@@ -2070,17 +2093,30 @@ export default function App() {
                                 <option value="rejected">❌ Rejected</option>
                               </select>
 
-                              {entry.applicationLink && (
-                                <a 
-                                  href={entry.applicationLink} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer" 
-                                  className="p-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl transition-all border border-neutral-200"
-                                  title="Open Job Posting"
-                                >
-                                  <ExternalLink className="w-4 h-4" />
-                                </a>
-                              )}
+                              {entry.applicationLink && (() => {
+                                const check = validateJobUrlIntegrity(entry.applicationLink, entry.jobTitle, entry.company);
+                                if (check.isUnavailable) {
+                                  return (
+                                    <span 
+                                      className="p-2.5 bg-neutral-100 text-neutral-400 rounded-xl border border-neutral-200 cursor-not-allowed flex items-center justify-center"
+                                      title={check.fallbackReason || "Original job link is unavailable"}
+                                    >
+                                      <AlertCircle className="w-4 h-4 text-neutral-400" />
+                                    </span>
+                                  );
+                                }
+                                return (
+                                  <a 
+                                    href={check.url} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className="p-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl transition-all border border-neutral-200"
+                                    title={check.isFallback ? `Direct link unavailable. Open ${entry.company} Portal Search` : "Open Job Posting"}
+                                  >
+                                    <ExternalLink className="w-4 h-4" />
+                                  </a>
+                                );
+                              })()}
 
                               <button 
                                 onClick={() => handleDeleteTrackedJob(entry.jobId)}
@@ -2283,17 +2319,17 @@ export default function App() {
                 <div className="lg:col-span-2 space-y-6">
                   <ProfileSection title="Core Information">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <Input label="Full Name" value={profile.name} onChange={(v) => setProfile({...profile, name: v})} />
-                      <Input label="Location" value={profile.location} onChange={(v) => setProfile({...profile, location: v})} />
-                      <Input label="Target Salary" value={profile.targetSalary} onChange={(v) => setProfile({...profile, targetSalary: v})} />
+                      <Input label="Full Name" value={stripPdfBytecode(profile.name)} onChange={(v) => setProfile({...profile, name: stripPdfBytecode(v)})} />
+                      <Input label="Location" value={stripPdfBytecode(profile.location)} onChange={(v) => setProfile({...profile, location: stripPdfBytecode(v)})} />
+                      <Input label="Target Salary" value={stripPdfBytecode(profile.targetSalary)} onChange={(v) => setProfile({...profile, targetSalary: stripPdfBytecode(v)})} />
                     </div>
                   </ProfileSection>
 
                   <ProfileSection title="Experience Summary">
                     <textarea 
                       className="w-full bg-neutral-50 border border-neutral-200 rounded-xl p-4 text-sm font-medium focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all outline-none min-h-[140px] leading-relaxed"
-                      value={profile.experienceSummary}
-                      onChange={(e) => setProfile({...profile, experienceSummary: e.target.value})}
+                      value={stripPdfBytecode(profile.experienceSummary)}
+                      onChange={(e) => setProfile({...profile, experienceSummary: stripPdfBytecode(e.target.value)})}
                     />
                   </ProfileSection>
 
@@ -3731,18 +3767,6 @@ function StatCard({ label, value, icon, active, onClick }: { label: string, valu
   );
 }
 
-function getPlatformLabel(url: string) {
-  if (!url) return 'Job Portal';
-  const lower = url.toLowerCase();
-  if (lower.includes('linkedin.com')) return 'LinkedIn';
-  if (lower.includes('pnet.co.za')) return 'PNet';
-  if (lower.includes('indeed.com')) return 'Indeed';
-  if (lower.includes('offerzen.com')) return 'OfferZen';
-  if (lower.includes('careers24.com')) return 'Careers24';
-  if (lower.includes('google.com')) return 'Google Search';
-  return 'Company Portal';
-}
-
 function JobCard({ 
   job, 
   index, 
@@ -3766,8 +3790,11 @@ function JobCard({
   onNavigateToTracker?: () => void
 }) {
   const [justOpenedApply, setJustOpenedApply] = useState(false);
-  const resolvedLink = resolveDirectOrSearchUrl(job.applicationLink, job.jobTitle, job.company);
-  const platform = getPlatformLabel(resolvedLink);
+  const urlIntegrity = validateJobUrlIntegrity(job.applicationLink, job.jobTitle, job.company, job.location, { index });
+  const resolvedLink = urlIntegrity.url || resolveDirectOrSearchUrl(job.applicationLink, job.jobTitle, job.company, job.location, index);
+  const platform = urlIntegrity.isFallback
+    ? 'Company Portal'
+    : (urlIntegrity.isUnavailable ? 'Unavailable' : getPlatformLabel(resolvedLink));
   const priority = job.probabilityOfSuccess;
   const platformUrls = getPlatformSearchUrls(job.jobTitle, job.company, job.location);
 
@@ -3822,7 +3849,7 @@ function JobCard({
           <div className="space-y-3 flex-1">
             <div className="flex items-center gap-3 flex-wrap">
               <h4 className="text-2xl font-black text-neutral-950 tracking-tight group-hover:text-amber-700 transition-colors">
-                {job.jobTitle}
+                {stripPdfBytecode(job.jobTitle)}
               </h4>
               <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
                 priority === 'HIGH' ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-neutral-100 text-neutral-800 border border-neutral-200'
@@ -3830,9 +3857,27 @@ function JobCard({
                 <Zap className="w-3 h-3 text-amber-600" />
                 {job.matchScore}% Match
               </div>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-600 bg-neutral-100 border border-neutral-200 px-2.5 py-1 rounded-md">
-                {platform}
-              </span>
+
+              {urlIntegrity.isUnavailable ? (
+                <span 
+                  className="text-[10px] font-black uppercase tracking-wider text-rose-800 bg-rose-50 border border-rose-300 px-2.5 py-1 rounded-md flex items-center gap-1"
+                  title={urlIntegrity.fallbackReason || 'Listing link unavailable or broken'}
+                >
+                  <AlertCircle className="w-3 h-3 text-rose-600" /> Link Unavailable
+                </span>
+              ) : urlIntegrity.isFallback ? (
+                <span 
+                  className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-50 border border-amber-300 px-2.5 py-1 rounded-md flex items-center gap-1"
+                  title={urlIntegrity.fallbackReason || 'Direct link was unverified; routed to verified company careers search'}
+                >
+                  <Building2 className="w-3 h-3 text-amber-600" /> Company Portal
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-600 bg-neutral-100 border border-neutral-200 px-2.5 py-1 rounded-md">
+                  {platform}
+                </span>
+              )}
+
               {isSaved && (
                 <span className="text-[10px] font-black uppercase tracking-wider text-amber-900 bg-amber-50 border border-amber-300 px-2.5 py-1 rounded-md flex items-center gap-1">
                   <BookmarkCheck className="w-3 h-3 text-amber-600" /> Saved
@@ -3849,36 +3894,60 @@ function JobCard({
                 <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-500">
                   <Briefcase className="w-4 h-4" />
                 </div>
-                {job.company}
+                {stripPdfBytecode(job.company)}
               </div>
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-500">
                   <MapPin className="w-4 h-4" />
                 </div>
-                {job.location}
+                {stripPdfBytecode(job.location)}
               </div>
               {job.salary && (
                 <div className="flex items-center gap-2 text-amber-800">
                   <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center">
                     <DollarSign className="w-4 h-4 text-amber-600" />
                   </div>
-                  {job.salary}
+                  {stripPdfBytecode(job.salary)}
                 </div>
               )}
             </div>
           </div>
 
           <div className="flex items-center gap-3 flex-wrap md:flex-nowrap flex-shrink-0">
-            <a 
-              href={resolvedLink} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              onClick={() => setJustOpenedApply(true)}
-              className="flex items-center justify-center gap-2 bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-6 py-3.5 rounded-2xl text-xs font-black transition-all shadow-md active:scale-95"
-            >
-              Apply / View Position
-              <ExternalLink className="w-4 h-4" />
-            </a>
+            {urlIntegrity.isUnavailable ? (
+              <button 
+                disabled
+                className="flex items-center justify-center gap-2 bg-neutral-100 text-neutral-400 border border-neutral-200 px-6 py-3.5 rounded-2xl text-xs font-bold cursor-not-allowed flex-shrink-0"
+                title={urlIntegrity.fallbackReason || 'Direct listing link unavailable'}
+              >
+                <AlertCircle className="w-4 h-4 text-neutral-400" />
+                Position Unavailable
+              </button>
+            ) : urlIntegrity.isFallback ? (
+              <a 
+                href={urlIntegrity.url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                onClick={() => setJustOpenedApply(true)}
+                className="flex items-center justify-center gap-2 bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-500 hover:to-yellow-600 text-neutral-950 px-6 py-3.5 rounded-2xl text-xs font-black transition-all shadow-md active:scale-95 border border-amber-400 flex-shrink-0"
+                title={urlIntegrity.fallbackReason || 'Direct link replaced by company careers search'}
+              >
+                <Building2 className="w-4 h-4" />
+                Search Company Careers
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            ) : (
+              <a 
+                href={resolvedLink} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                onClick={() => setJustOpenedApply(true)}
+                className="flex items-center justify-center gap-2 bg-neutral-950 hover:bg-black text-amber-400 border border-amber-500/40 px-6 py-3.5 rounded-2xl text-xs font-black transition-all shadow-md active:scale-95 flex-shrink-0"
+              >
+                Apply / View Position
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            )}
 
             {trackedEntry && trackedEntry.status === 'applied' ? (
               <button 
@@ -3913,21 +3982,51 @@ function JobCard({
           </div>
         </div>
 
+        {/* URL Integrity Notice if Fallback or Unavailable */}
+        {urlIntegrity.isFallback && (
+          <div className="mb-6 p-3.5 bg-amber-50 rounded-2xl border border-amber-200/90 text-xs text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 bg-amber-100 rounded-lg text-amber-800 flex-shrink-0">
+                <Building2 className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="font-bold text-neutral-900">Direct Link Verified & Fallback Activated</p>
+                <p className="text-[11px] text-neutral-600">
+                  {urlIntegrity.fallbackReason || 'Direct URL pattern was unverified or subject to 404 expiration'}. Routed directly to <strong>{job.company}</strong> official careers portal search.
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-800 bg-amber-100/80 border border-amber-200 px-2 py-0.5 rounded-md flex-shrink-0">
+              Company Portal Fallback
+            </span>
+          </div>
+        )}
+
+        {urlIntegrity.isUnavailable && (
+          <div className="mb-6 p-3.5 bg-rose-50 rounded-2xl border border-rose-200/90 text-xs text-rose-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 bg-rose-100 rounded-lg text-rose-800 flex-shrink-0">
+                <AlertCircle className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="font-bold text-neutral-900">Original Position Link Flagged Unavailable</p>
+                <p className="text-[11px] text-neutral-600">
+                  {urlIntegrity.fallbackReason || 'Listing link is expired or closed'}. You can still discover live opportunities at this employer via the cross-portal search options below.
+                </p>
+              </div>
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-rose-800 bg-rose-100/80 border border-rose-200 px-2 py-0.5 rounded-md flex-shrink-0">
+              Link Unavailable
+            </span>
+          </div>
+        )}
+
         {/* Multi-portal direct search pills */}
         <div className="mb-6 p-4 bg-neutral-50 rounded-2xl border border-neutral-200 flex flex-wrap items-center justify-between gap-3">
           <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest flex items-center gap-1.5">
             <Globe className="w-3.5 h-3.5 text-amber-600" /> Verify Live Postings Across Portals:
           </span>
           <div className="flex items-center gap-2 flex-wrap">
-            <a 
-              href={platformUrls.linkedin} 
-              target="_blank" 
-              rel="noopener noreferrer" 
-              onClick={() => setJustOpenedApply(true)}
-              className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1"
-            >
-              LinkedIn <ArrowUpRight className="w-3 h-3" />
-            </a>
             <a 
               href={platformUrls.pnet} 
               target="_blank" 
@@ -3947,6 +4046,24 @@ function JobCard({
               Indeed SA <ArrowUpRight className="w-3 h-3" />
             </a>
             <a 
+              href={platformUrls.careers24} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              onClick={() => setJustOpenedApply(true)}
+              className="text-xs font-bold text-orange-700 bg-orange-50 border border-orange-200 hover:bg-orange-100 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1"
+            >
+              Careers24 <ArrowUpRight className="w-3 h-3" />
+            </a>
+            <a 
+              href={platformUrls.google} 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              onClick={() => setJustOpenedApply(true)}
+              className="text-xs font-bold text-neutral-800 bg-white border border-neutral-300 hover:bg-neutral-100 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1"
+            >
+              Google Jobs <Search className="w-3 h-3" />
+            </a>
+            <a 
               href={platformUrls.companySite} 
               target="_blank" 
               rel="noopener noreferrer" 
@@ -3956,13 +4073,13 @@ function JobCard({
               Careers Portal <ArrowUpRight className="w-3 h-3" />
             </a>
             <a 
-              href={platformUrls.google} 
+              href={platformUrls.linkedin} 
               target="_blank" 
               rel="noopener noreferrer" 
               onClick={() => setJustOpenedApply(true)}
-              className="text-xs font-bold text-neutral-700 bg-white border border-neutral-200 hover:bg-neutral-100 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1"
+              className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1"
             >
-              Google Jobs <Search className="w-3 h-3" />
+              LinkedIn <ArrowUpRight className="w-3 h-3" />
             </a>
           </div>
         </div>
@@ -3977,7 +4094,7 @@ function JobCard({
               {job.whyMatches.map((point, i) => (
                 <li key={i} className="text-sm text-neutral-600 flex items-start gap-3 leading-relaxed">
                   <div className="mt-1.5 w-1.5 h-1.5 bg-amber-500 rounded-full flex-shrink-0"></div>
-                  {point}
+                  {stripPdfBytecode(point)}
                 </li>
               ))}
             </ul>
@@ -3992,7 +4109,7 @@ function JobCard({
               {job.keyGaps.map((gap, i) => (
                 <li key={i} className="text-sm text-neutral-600 flex items-start gap-3 leading-relaxed">
                   <div className="mt-1.5 w-1.5 h-1.5 bg-neutral-400 rounded-full flex-shrink-0"></div>
-                  {gap}
+                  {stripPdfBytecode(gap)}
                 </li>
               ))}
             </ul>

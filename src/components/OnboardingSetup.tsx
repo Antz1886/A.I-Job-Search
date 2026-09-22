@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { sanitizeCVInputText, cleanLocationForSearch, stripPdfBytecode } from '../services/industryIntelligence';
 import { 
   Sparkles, 
   FileText, 
@@ -35,7 +36,8 @@ interface OnboardingSetupProps {
 export function OnboardingSetup({ currentUser, onComplete, onSignOut }: OnboardingSetupProps) {
   const [activeTab, setActiveTab] = useState<'paste' | 'upload'>('paste');
   const [cvText, setCvText] = useState('');
-  const [targetLocation, setTargetLocation] = useState('Johannesburg, South Africa (Open to Hybrid / Remote)');
+  const [uploadedFile, setUploadedFile] = useState<{ name: string; pdfBase64?: string } | null>(null);
+  const [targetLocation, setTargetLocation] = useState('Johannesburg, South Africa');
   const [targetSalary, setTargetSalary] = useState('R45,000 - R65,000 per month');
   
   // Processing & progress states
@@ -51,6 +53,7 @@ export function OnboardingSetup({ currentUser, onComplete, onSignOut }: Onboardi
   ];
 
   const handleSampleCV = () => {
+    setUploadedFile(null);
     setCvText(`Ansline Martiens
 Location: Johannesburg, South Africa
 Target Salary: R45,000 - R60,000 per month
@@ -68,27 +71,65 @@ ITIL v4 Foundation & Managing Professional, SLA Governance, Incident & Problem M
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
       const reader = new FileReader();
       reader.onload = (event) => {
-        const text = event.target?.result as string;
-        if (text) {
-          setCvText(text);
-          setError(null);
+        const dataUrl = event.target?.result as string;
+        const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+        setUploadedFile({ name: file.name, pdfBase64: base64 });
+        setCvText(`[Attached PDF Document: ${file.name}]\n\nCandidate resume uploaded. Our native AI document engine will parse all roles, achievements, and skills directly from this PDF.`);
+        setError(null);
+      };
+      reader.readAsDataURL(file);
+    } else if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = (event.target?.result as string) || '';
+        // If file content starts with PDF signature or contains PDF dictionary bytecode
+        if (text.includes('%PDF-') || text.includes('/FlateDecode') || text.includes('/Filter')) {
+          const dataReader = new FileReader();
+          dataReader.onload = (e2) => {
+            const dataUrl = e2.target?.result as string;
+            const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+            setUploadedFile({ name: file.name, pdfBase64: base64 });
+            setCvText(`[Attached PDF Document: ${file.name}]\n\nCandidate resume uploaded. Our native AI document engine will parse all roles, achievements, and skills directly from this PDF.`);
+            setError(null);
+          };
+          dataReader.readAsDataURL(file);
+          return;
         }
+
+        const cleaned = stripPdfBytecode(sanitizeCVInputText(text));
+        setCvText(cleaned);
+        setUploadedFile({ name: file.name });
+        setError(null);
       };
       reader.readAsText(file);
     } else {
-      // For non-txt files, read text content if possible or prompt with prefill
       const reader = new FileReader();
       reader.onload = (event) => {
-        const text = event.target?.result as string;
-        if (text && text.trim().length > 50) {
-          setCvText(text);
+        const text = (event.target?.result as string) || '';
+        // Check if file is secretly a PDF or binary
+        if (text.includes('%PDF-') || text.includes('/FlateDecode') || text.includes('/Filter')) {
+          const dataReader = new FileReader();
+          dataReader.onload = (e2) => {
+            const dataUrl = e2.target?.result as string;
+            const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+            setUploadedFile({ name: file.name, pdfBase64: base64 });
+            setCvText(`[Attached PDF Document: ${file.name}]\n\nCandidate resume uploaded. Our native AI document engine will parse all roles, achievements, and skills directly from this PDF.`);
+            setError(null);
+          };
+          dataReader.readAsDataURL(file);
+          return;
+        }
+
+        const cleaned = stripPdfBytecode(sanitizeCVInputText(text));
+        if (cleaned && cleaned.trim().length > 50) {
+          setCvText(cleaned);
         } else {
-          // Provide friendly helper text
           setCvText(`Candidate Name: ${file.name.replace(/\.[^/.]+$/, "")}\nUploaded Document: ${file.name}\n\nPlease paste plain text excerpt from your document if automatic text extraction is incomplete.`);
         }
+        setUploadedFile({ name: file.name });
         setError(null);
       };
       reader.readAsText(file);
@@ -97,8 +138,8 @@ ITIL v4 Foundation & Managing Professional, SLA Governance, Incident & Problem M
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cvText.trim() || cvText.trim().length < 40) {
-      setError("Please paste or upload your CV content (at least 40 characters) so our AI can accurately extract your skills and target roles.");
+    if (!cvText.trim() || cvText.trim().length < 30) {
+      setError("Please paste or upload your CV content so our AI can accurately extract your skills and target roles.");
       return;
     }
 
@@ -109,11 +150,11 @@ ITIL v4 Foundation & Managing Professional, SLA Governance, Incident & Problem M
     try {
       // Step 1: Parse CV
       setCurrentStep(0);
-      const parsedProfile = await parseCVToProfile(cvText.trim());
+      const parsedProfile = await parseCVToProfile(cvText.trim(), uploadedFile?.pdfBase64);
 
       // Merge user overrides if provided
       if (targetLocation && targetLocation.trim()) {
-        parsedProfile.location = targetLocation.trim();
+        parsedProfile.location = cleanLocationForSearch(targetLocation.trim());
       }
       if (targetSalary && targetSalary.trim()) {
         parsedProfile.targetSalary = targetSalary.trim();
@@ -330,7 +371,7 @@ ITIL v4 Foundation & Managing Professional, SLA Governance, Incident & Problem M
                   <textarea
                     rows={8}
                     value={cvText}
-                    onChange={(e) => setCvText(e.target.value)}
+                    onChange={(e) => setCvText(stripPdfBytecode(e.target.value))}
                     placeholder="e.g. Jane Doe, Senior Operations Lead / Financial Specialist / Marketing Manager / Software Engineer in Johannesburg... Key Skills: Strategic Planning, Stakeholder Management, Team Leadership... 6+ years experience..."
                     className="w-full p-4 rounded-2xl border border-neutral-300 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 text-xs sm:text-sm text-neutral-900 placeholder:text-neutral-400 font-mono transition-all outline-none resize-y"
                   />

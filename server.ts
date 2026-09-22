@@ -10,6 +10,15 @@ import {
   generateFallbackInterviewPrep,
   generateFallbackCVDraft,
   extractCandidateProfileFromText,
+  cleanJobTitle,
+  cleanCompanyName,
+  cleanLocationForSearch,
+  sanitizeCVInputText,
+  sanitizeCandidateProfile,
+  stripPdfBytecode,
+  getDiversePlatformJobLink,
+  getDirectCompanyCareersUrl,
+  getIndeedSearchUrl,
 } from "./src/services/industryIntelligence";
 
 dotenv.config();
@@ -212,19 +221,17 @@ const CANDIDATE_PROFILE_SCHEMA = {
   required: ["name", "location", "targetSalary", "targetRoles", "experienceSummary", "companiesWorkedAt", "keySkills"],
 };
 
-// Helper to sanitize search URLs
-function getSearchUrl(title: string, company: string, location: string) {
-  const encCombined = encodeURIComponent(`${title} ${company}`.trim());
-  const encLocation = encodeURIComponent(location || 'South Africa');
-  return `https://www.linkedin.com/jobs/search/?keywords=${encCombined}&location=${encLocation}`;
+// Helper to sanitize search URLs with diversified platforms
+function getSearchUrl(title: string, company: string, location: string, index: number = 0) {
+  return getDiversePlatformJobLink(index, title, company, location);
 }
 
 // Resilient Gemini Invocation Helper
-async function callGeminiSafe<T>(prompt: string, schema: any): Promise<T | null> {
+async function callGeminiSafe<T>(prompt: any, schema: any): Promise<T | null> {
   const ai = getAi();
   if (!ai) return null;
 
-  const candidateModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-3.7-flash"];
+  const candidateModels = ["gemini-flash-latest", "gemini-3.1-flash-lite"];
   for (const model of candidateModels) {
     try {
       const response = await ai.models.generateContent({
@@ -264,10 +271,12 @@ app.get("/api/health", (req, res) => {
 
 // 1. Generate Daily Report
 app.post("/api/generate-report", async (req, res) => {
-  const { profile } = req.body;
-  if (!profile) {
+  const { profile: rawProfile } = req.body;
+  if (!rawProfile) {
     return res.status(400).json({ error: "Missing profile payload" });
   }
+
+  const profile = sanitizeCandidateProfile(rawProfile);
 
   const prompt = `
     You are an expert AI Job Search & Career Copilot for all job seekers across South Africa and remote global markets.
@@ -286,13 +295,88 @@ app.post("/api/generate-report", async (req, res) => {
     1. Find 8 to 12 realistic, high-quality opportunities (5-7 topMatches, 3-5 secondaryMatches) matching the candidate's exact profession (e.g. Finance, Healthcare, Marketing, Sales, Human Resources, Supply Chain, Engineering, Technology, Operations, Administration, etc.).
     2. Target leading South African & global employers in the candidate's industry (e.g., Standard Bank, Discovery, Shoprite, Woolworths, Netcare, Sasol, Takealot, MultiChoice, Vodacom, Imperial Logistics, Old Mutual, etc.).
     3. Match salary benchmarks to ${profile.targetSalary || "ZAR 40,000 - 65,000/mo"}.
-    4. Application links must be direct LinkedIn, PNet, or Careers24 search or portal URLs.
+    4. Provide genuine application links: use authentic search queries on PNet (e.g. https://www.pnet.co.za/jobs/search?keywords=...), Indeed SA (https://za.indeed.com/jobs?q=...), Careers24 (https://www.careers24.com/jobs/results/?Keywords=...), or direct employer career portals. Never include invalid or imaginary job IDs like currentJobId.
     5. Calculate matchScore (75-98) and probabilityOfSuccess (HIGH or MEDIUM).
     6. Return strict JSON matching schema.
   `;
 
   const reportData = await callGeminiSafe<any>(prompt, REPORT_SCHEMA);
   if (reportData) {
+    const sanitizeJob = (j: any, idx: number) => {
+      const title = cleanJobTitle(j.jobTitle) || 'Specialist';
+      const company = cleanCompanyName(j.company);
+      const loc = cleanLocationForSearch(j.location || profile.location);
+      let appLink = j.applicationLink;
+      if (
+        !appLink || 
+        appLink.includes('<<') || 
+        appLink.includes('Filter') || 
+        appLink.includes('currentJobId=') ||
+        appLink.includes('FlateDecode') ||
+        appLink.includes('/Length') ||
+        appLink.includes('undefined') ||
+        appLink.includes('null')
+      ) {
+        appLink = getSearchUrl(title, company, loc, idx);
+      } else {
+        const lower = appLink.toLowerCase();
+        if (lower.includes('linkedin.com')) {
+          try {
+            const u = new URL(appLink);
+            u.searchParams.delete('currentJobId');
+            u.searchParams.set('location', cleanLocationForSearch(u.searchParams.get('location') || loc));
+            appLink = u.toString();
+          } catch {
+            appLink = getSearchUrl(title, company, loc, idx);
+          }
+        } else if (lower.includes('indeed.com')) {
+          try {
+            const u = new URL(appLink);
+            if (
+              u.pathname.includes('/viewjob') ||
+              u.pathname.includes('/rc/clk') ||
+              u.searchParams.has('jk') ||
+              u.searchParams.has('vjk') ||
+              !u.pathname.includes('/jobs')
+            ) {
+              appLink = getIndeedSearchUrl(title, loc);
+            } else {
+              let q = u.searchParams.get('q') || title;
+              if (company && company !== 'Enterprise') {
+                try {
+                  q = q.replace(new RegExp(`\\b${company}\\b`, 'gi'), '').trim();
+                } catch {
+                  // ignore
+                }
+              }
+              q = cleanJobTitle(q) || cleanJobTitle(title) || 'Specialist';
+              const l = u.searchParams.get('l') || loc;
+              appLink = getIndeedSearchUrl(q, l);
+            }
+          } catch {
+            appLink = getIndeedSearchUrl(title, loc);
+          }
+        }
+      }
+      return {
+        ...j,
+        jobTitle: title,
+        company,
+        location: loc,
+        salary: stripPdfBytecode(j.salary) || "Market Rate",
+        whyMatches: Array.isArray(j.whyMatches) ? j.whyMatches.map((w: string) => stripPdfBytecode(w)).filter(Boolean) : [],
+        keyGaps: Array.isArray(j.keyGaps) ? j.keyGaps.map((g: string) => stripPdfBytecode(g)).filter(Boolean) : [],
+        applicationLink: appLink,
+      };
+    };
+
+    if (Array.isArray(reportData.topMatches)) {
+      reportData.topMatches = reportData.topMatches.map((j: any, i: number) => sanitizeJob(j, i));
+    }
+    if (Array.isArray(reportData.secondaryMatches)) {
+      reportData.secondaryMatches = reportData.secondaryMatches.map((j: any, i: number) => sanitizeJob(j, i + 5));
+    }
+
     return res.json(reportData);
   }
 
@@ -303,10 +387,11 @@ app.post("/api/generate-report", async (req, res) => {
 
 // 2. Generate ATS Analysis
 app.post("/api/generate-ats", async (req, res) => {
-  const { profile } = req.body;
-  if (!profile) {
+  const { profile: rawProfile } = req.body;
+  if (!rawProfile) {
     return res.status(400).json({ error: "Missing profile payload" });
   }
+  const profile = sanitizeCandidateProfile(rawProfile);
 
   const prompt = `
     You are a Senior Executive Talent Recruiter and ATS Specialist.
@@ -332,13 +417,14 @@ app.post("/api/generate-ats", async (req, res) => {
 
 // 3. Generate Cover Letter
 app.post("/api/generate-cover-letter", async (req, res) => {
-  const { profile, targetJobTitle, company } = req.body;
-  if (!profile) {
+  const { profile: rawProfile, targetJobTitle, company } = req.body;
+  if (!rawProfile) {
     return res.status(400).json({ error: "Missing profile payload" });
   }
+  const profile = sanitizeCandidateProfile(rawProfile);
 
   const prompt = `
-    Write a highly persuasive ATS-optimized Cover Letter for ${profile.name} applying for "${targetJobTitle}" at "${company}".
+    Write a highly persuasive ATS-optimized Cover Letter for ${profile.name} applying for "${cleanJobTitle(targetJobTitle)}" at "${cleanCompanyName(company)}".
     Location: ${profile.location}
     Experience: ${profile.experienceSummary}
     Skills: ${(profile.keySkills || []).join(", ")}
@@ -358,7 +444,8 @@ app.post("/api/generate-cover-letter", async (req, res) => {
 
 // 4. Generate Interview Prep
 app.post("/api/generate-interview-prep", async (req, res) => {
-  const { profile, targetRole } = req.body;
+  const { profile: rawProfile, targetRole } = req.body;
+  const profile = rawProfile ? sanitizeCandidateProfile(rawProfile) : undefined;
   const roleToPrep = targetRole || profile?.targetRoles?.[0] || "IT Operations Manager";
 
   const prompt = `
@@ -381,7 +468,8 @@ app.post("/api/generate-interview-prep", async (req, res) => {
 
 // 5. Generate Full CV Draft
 app.post("/api/generate-cv-draft", async (req, res) => {
-  const { profile, targetRole } = req.body;
+  const { profile: rawProfile, targetRole } = req.body;
+  const profile = rawProfile ? sanitizeCandidateProfile(rawProfile) : undefined;
   const roleToDraft = targetRole || profile?.targetRoles?.[0] || "Operations Leader";
 
   const prompt = `
@@ -405,15 +493,34 @@ app.post("/api/generate-cv-draft", async (req, res) => {
 
 // 6. Parse Resume CV
 app.post("/api/parse-cv", async (req, res) => {
-  const { cvText } = req.body;
-  if (!cvText) {
-    return res.status(400).json({ error: "Missing CV text" });
+  const { cvText, pdfBase64 } = req.body;
+  if (!cvText && !pdfBase64) {
+    return res.status(400).json({ error: "Missing CV text or PDF payload" });
   }
 
+  // If a PDF base64 payload is provided, let Gemini parse the PDF directly
+  if (pdfBase64) {
+    const pdfPrompt = [
+      {
+        inlineData: {
+          data: pdfBase64,
+          mimeType: "application/pdf",
+        },
+      },
+      "Extract structured candidate profile from this resume/CV document: name, location, targetSalary, targetRoles, experienceSummary, companiesWorkedAt, keySkills. Return strict JSON matching schema."
+    ];
+
+    const parsedFromPdf = await callGeminiSafe<any>(pdfPrompt, CANDIDATE_PROFILE_SCHEMA);
+    if (parsedFromPdf) {
+      return res.json(sanitizeCandidateProfile(parsedFromPdf));
+    }
+  }
+
+  const sanitized = stripPdfBytecode(sanitizeCVInputText(cvText || ""));
   const prompt = `
-    Parse this raw candidate resume/CV into structured Candidate Profile:
+    Parse this candidate resume/CV into structured Candidate Profile:
     """
-    ${cvText}
+    ${sanitized}
     """
     Extract: name, location, targetSalary, targetRoles, experienceSummary, companiesWorkedAt, keySkills.
     Return strict JSON matching schema.
@@ -421,12 +528,12 @@ app.post("/api/parse-cv", async (req, res) => {
 
   const parsedProfile = await callGeminiSafe<any>(prompt, CANDIDATE_PROFILE_SCHEMA);
   if (parsedProfile) {
-    return res.json(parsedProfile);
+    return res.json(sanitizeCandidateProfile(parsedProfile));
   }
 
   // Dynamic regex and semantic extractor matching the candidate's actual text
-  const fallbackProfile = extractCandidateProfileFromText(cvText);
-  return res.json(fallbackProfile);
+  const fallbackProfile = extractCandidateProfileFromText(sanitized);
+  return res.json(sanitizeCandidateProfile(fallbackProfile));
 });
 
 // Production / Dev Vite static handling

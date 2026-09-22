@@ -9,6 +9,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { parseCVToProfile } from '../services/geminiService';
+import { sanitizeCVInputText, stripPdfBytecode, sanitizeCandidateProfile } from '../services/industryIntelligence';
 import { CandidateProfile } from '../types';
 
 interface CVParserModalProps {
@@ -19,16 +20,62 @@ interface CVParserModalProps {
 
 export function CVParserModal({ isOpen, onClose, onProfileParsed }: CVParserModalProps) {
   const [cvText, setCvText] = useState('');
+  const [pdfBase64, setPdfBase64] = useState<string | undefined>(undefined);
+  const [fileName, setFileName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   if (!isOpen) return null;
 
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+        setPdfBase64(base64);
+        setFileName(file.name);
+        setCvText(`[Attached PDF: ${file.name}]\n\nResume uploaded. Gemini native document parsing will extract all fields directly from this PDF.`);
+        setError(null);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const text = (event.target?.result as string) || '';
+        if (text.includes('%PDF-') || text.includes('/FlateDecode') || text.includes('/Filter')) {
+          const dataReader = new FileReader();
+          dataReader.onload = (e2) => {
+            const dataUrl = e2.target?.result as string;
+            const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+            setPdfBase64(base64);
+            setFileName(file.name);
+            setCvText(`[Attached PDF: ${file.name}]\n\nResume uploaded. Gemini native document parsing will extract all fields directly from this PDF.`);
+            setError(null);
+          };
+          dataReader.readAsDataURL(file);
+          return;
+        }
+
+        if (text) {
+          setCvText(stripPdfBytecode(sanitizeCVInputText(text)));
+          setFileName(file.name);
+          setPdfBase64(undefined);
+          setError(null);
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
   const handleParse = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!cvText.trim() || cvText.trim().length < 50) {
-      setError('Please paste a substantial portion of your CV/Resume (at least 50 characters) so the AI can extract your details accurately.');
+    if (!cvText.trim() || cvText.trim().length < 30) {
+      setError('Please paste or upload a substantial portion of your CV/Resume so the AI can extract your details accurately.');
       return;
     }
 
@@ -37,10 +84,11 @@ export function CVParserModal({ isOpen, onClose, onProfileParsed }: CVParserModa
     setSuccess(false);
 
     try {
-      const parsedProfile = await parseCVToProfile(cvText.trim());
+      const parsedProfile = await parseCVToProfile(cvText.trim(), pdfBase64);
+      const cleanProfile = sanitizeCandidateProfile(parsedProfile);
       setSuccess(true);
       setTimeout(() => {
-        onProfileParsed(parsedProfile);
+        onProfileParsed(cleanProfile);
         onClose();
       }, 1000);
     } catch (err: any) {
@@ -52,6 +100,8 @@ export function CVParserModal({ isOpen, onClose, onProfileParsed }: CVParserModa
   };
 
   const handleSampleCV = () => {
+    setPdfBase64(undefined);
+    setFileName(null);
     setCvText(`Ansline Martiens
 Location: Johannesburg, South Africa
 Target Salary: R45,000 - R55,000 per month
@@ -112,21 +162,32 @@ ITIL v4, SLA Governance, Incident & Problem Management, Cloud Infrastructure (AW
             <div className="flex items-center justify-between mb-2">
               <label className="text-xs font-bold text-neutral-800 uppercase tracking-wider flex items-center gap-1.5">
                 <FileText className="w-3.5 h-3.5 text-amber-600" />
-                Resume / CV Plain Text
+                Resume / CV Plain Text or PDF
               </label>
-              <button
-                type="button"
-                onClick={handleSampleCV}
-                className="text-[11px] font-bold text-amber-600 hover:text-amber-700 underline"
-              >
-                Load Sample Resume
-              </button>
+              <div className="flex items-center gap-3">
+                <label className="cursor-pointer text-[11px] font-bold text-amber-600 hover:text-amber-700 underline flex items-center gap-1">
+                  <span>Upload PDF / File</span>
+                  <input
+                    type="file"
+                    accept=".pdf,.txt,.doc,.docx"
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleSampleCV}
+                  className="text-[11px] font-bold text-neutral-500 hover:text-neutral-700 underline"
+                >
+                  Load Sample
+                </button>
+              </div>
             </div>
 
             <textarea
               required
               value={cvText}
-              onChange={(e) => setCvText(e.target.value)}
+              onChange={(e) => setCvText(stripPdfBytecode(e.target.value))}
               placeholder="Paste your CV text, experience bullet points, or LinkedIn 'About' summary here..."
               className="w-full bg-neutral-50 border border-neutral-200 rounded-2xl p-4 text-xs font-mono font-medium text-neutral-900 leading-relaxed outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:bg-white min-h-[220px]"
             />

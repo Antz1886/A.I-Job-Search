@@ -9,6 +9,30 @@ import {
   FullCVDraft,
   ProfilePreset
 } from "../types";
+import {
+  cleanJobTitle,
+  cleanCompanyName,
+  cleanLocationForSearch,
+  sanitizeCVInputText,
+  sanitizeCandidateProfile,
+  getDirectCompanyCareersUrl,
+  getDiversePlatformJobLink,
+  getIndeedSearchUrl,
+  cleanLocationForIndeed,
+  validateJobUrlIntegrity,
+  getPlatformLabel,
+  stripPdfBytecode,
+  type JobUrlIntegrityResult,
+  type ValidateJobUrlOptions
+} from "./industryIntelligence";
+
+export {
+  validateJobUrlIntegrity,
+  getPlatformLabel,
+  stripPdfBytecode,
+  type JobUrlIntegrityResult,
+  type ValidateJobUrlOptions
+};
 
 export const DEFAULT_CANDIDATE_PROFILE: CandidateProfile = {
   name: "Ansline Martiens",
@@ -170,63 +194,91 @@ export const CAREER_PRESETS: ProfilePreset[] = [
   }
 ];
 
-export function cleanSearchQueryText(str: string): string {
+export function cleanSearchQueryText(str?: string): string {
   if (!str) return '';
   return str
-    .replace(/[/\-\\|()\[\]{}:;,\t\n]/g, ' ')
+    .replace(/<<[^>]*>>/g, ' ')
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\/Filter\s*\/[a-zA-Z0-9]+/gi, ' ')
+    .replace(/\/Length\s*\d+/gi, ' ')
+    .replace(/\/Type\s*\/[a-zA-Z0-9]+/gi, ' ')
+    .replace(/%PDF-[0-9.]+/gi, ' ')
+    .replace(/\b(FlateDecode|ASCIIHexDecode|stream|endstream|endobj|obj)\b/gi, ' ')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/[/\-\\|(){}:;,\t\n]/g, ' ')
     .replace(/["'’`]/g, '')
+    .replace(/[<>]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
 
 export function getPlatformSearchUrls(jobTitle: string, company: string, location: string = 'South Africa') {
-  const cleanTitle = cleanSearchQueryText(jobTitle);
-  const cleanCompany = cleanSearchQueryText(company);
-  const combined = `${cleanTitle} ${cleanCompany}`.trim();
-  const encCombined = encodeURIComponent(combined);
-  const encLocation = encodeURIComponent(location || 'South Africa');
+  const cleanTitle = cleanJobTitle(jobTitle) || cleanSearchQueryText(jobTitle) || 'Specialist';
+  const cleanCompany = cleanCompanyName(company);
+  const cleanLoc = cleanLocationForSearch(location);
+
+  const keywordsWithComp = cleanCompany ? `${cleanTitle} ${cleanCompany}` : cleanTitle;
+  const encKeywordsWithComp = encodeURIComponent(keywordsWithComp.trim());
+  const encTitleOnly = encodeURIComponent(cleanTitle.trim());
+  const encLocation = encodeURIComponent(cleanLoc.trim());
 
   return {
-    linkedin: `https://www.linkedin.com/jobs/search/?keywords=${encCombined}&location=${encLocation}`,
-    pnet: `https://www.pnet.co.za/jobs/search?keywords=${encCombined}`,
-    indeed: `https://za.indeed.com/jobs?q=${encCombined}&l=${encLocation}`,
-    careers24: `https://www.careers24.com/jobs/se-${encodeURIComponent(cleanTitle)}/`,
-    offerzen: `https://www.offerzen.com/jobs?query=${encodeURIComponent(cleanTitle)}`,
-    google: `https://www.google.com/search?q=${encodeURIComponent(`${cleanTitle} ${cleanCompany} South Africa job application`)}`,
-    companySite: `https://www.google.com/search?q=${encodeURIComponent(`site:${cleanCompany.toLowerCase().replace(/[^a-z0-9]/g, '')}.co.za OR site:${cleanCompany.toLowerCase().replace(/[^a-z0-9]/g, '')}.com careers ${cleanTitle}`)}`
+    linkedin: `https://www.linkedin.com/jobs/search/?keywords=${encKeywordsWithComp}&location=${encLocation}`,
+    pnet: `https://www.pnet.co.za/jobs/search?keywords=${encTitleOnly}&location=${encLocation}`,
+    indeed: getIndeedSearchUrl(cleanTitle, cleanLoc),
+    careers24: `https://www.careers24.com/jobs/results/?Keywords=${encTitleOnly}&Location=${encLocation}`,
+    offerzen: `https://www.offerzen.com/jobs?query=${encTitleOnly}`,
+    google: `https://www.google.com/search?q=${encodeURIComponent(`${cleanTitle} ${cleanCompany} jobs ${cleanLoc}`)}&ibp=htl;jobs`,
+    companySite: getDirectCompanyCareersUrl(cleanCompany, cleanTitle, cleanLoc)
   };
 }
 
 export function resolveDirectOrSearchUrl(
-  rawLink: string,
+  rawLink: string | undefined,
   jobTitle: string,
-  company: string
+  company: string,
+  location?: string,
+  index: number = 0
 ): string {
-  const urls = getPlatformSearchUrls(jobTitle, company, 'South Africa');
+  const cleanLoc = cleanLocationForSearch(location);
+  const integrity = validateJobUrlIntegrity(rawLink, jobTitle, company, cleanLoc, {
+    allowCompanyFallback: true,
+    index
+  });
 
-  if (!rawLink || rawLink.startsWith('http://') === false && rawLink.startsWith('https://') === false) {
-    return urls.linkedin;
+  if (integrity.isValid && integrity.url) {
+    return integrity.url;
   }
 
-  const lowerRaw = rawLink.toLowerCase();
-  if (lowerRaw.includes("pnet.co.za")) return rawLink;
-  if (lowerRaw.includes("indeed.com")) return rawLink;
-  if (lowerRaw.includes("offerzen.com")) return rawLink;
-  if (lowerRaw.includes("careers24.com")) return rawLink;
-  if (lowerRaw.includes("linkedin.com")) return rawLink;
-
-  return urls.linkedin;
+  // If flagged as unavailable and no company portal could be inferred, provide diversified active portal link
+  return getDiversePlatformJobLink(index, jobTitle, company, cleanLoc);
 }
 
 export function sanitizeReportLinks(report: DailyReport): DailyReport {
   if (!report) return report;
-  const sanitizeJob = (job: JobMatch): JobMatch => ({
-    ...job,
-    applicationLink: resolveDirectOrSearchUrl(job.applicationLink, job.jobTitle, job.company),
-  });
+  const sanitizeJob = (job: JobMatch, idx: number): JobMatch => {
+    const cleanTitle = cleanJobTitle(job.jobTitle) || 'Specialist';
+    const cleanComp = cleanCompanyName(job.company);
+    const cleanLoc = cleanLocationForSearch(job.location);
+    const cleanSalary = stripPdfBytecode(job.salary) || 'Market Rate (ZAR)';
+    const cleanWhy = (job.whyMatches || []).map(w => stripPdfBytecode(w)).filter(Boolean);
+    const cleanGaps = (job.keyGaps || []).map(g => stripPdfBytecode(g)).filter(Boolean);
 
-  const topMatches = (report.topMatches || []).map(sanitizeJob);
-  const secondaryMatches = (report.secondaryMatches || []).map(sanitizeJob);
+    return {
+      ...job,
+      jobTitle: cleanTitle,
+      company: cleanComp,
+      location: cleanLoc,
+      salary: cleanSalary,
+      whyMatches: cleanWhy,
+      keyGaps: cleanGaps,
+      applicationLink: resolveDirectOrSearchUrl(job.applicationLink, cleanTitle, cleanComp, cleanLoc, idx),
+    };
+  };
+
+  const topMatches = (report.topMatches || []).map((j, i) => sanitizeJob(j, i));
+  const secondaryMatches = (report.secondaryMatches || []).map((j, i) => sanitizeJob(j, i + 5));
   const totalCount = topMatches.length + secondaryMatches.length;
 
   const highMatches = topMatches.filter(j => j.probabilityOfSuccess === 'HIGH').length + secondaryMatches.filter(j => j.probabilityOfSuccess === 'HIGH').length;
@@ -246,30 +298,32 @@ export function sanitizeReportLinks(report: DailyReport): DailyReport {
 
 /**
  * Universal CV / Resume Parser
- * Parses pasted raw resume text or job seeker summary into a structured CandidateProfile
+ * Parses pasted raw resume text, PDF base64, or job seeker summary into a structured CandidateProfile
  */
-export async function parseCVToProfile(cvText: string): Promise<CandidateProfile> {
+export async function parseCVToProfile(cvText: string, pdfBase64?: string): Promise<CandidateProfile> {
+  const sanitizedInput = sanitizeCVInputText(cvText);
+
   try {
     const res = await fetch("/api/parse-cv", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ cvText }),
+      body: JSON.stringify({ cvText: sanitizedInput, pdfBase64 }),
     });
 
     if (res.ok) {
       const data = await res.json();
-      return data;
+      return sanitizeCandidateProfile(data);
     }
   } catch (err) {
     console.warn("API parse-cv failed, using local parser:", err);
   }
 
   // Fallback
-  const lines = cvText.split("\n").map(l => l.trim()).filter(Boolean);
+  const lines = sanitizedInput.split("\n").map(l => l.trim()).filter(Boolean);
   const firstLine = lines[0] || "Candidate";
-  const name = firstLine.length < 40 ? firstLine.replace(/^#+\s*/, "") : "Candidate";
+  const name = firstLine.length < 40 && !firstLine.includes("<") ? firstLine.replace(/^#+\s*/, "") : "Candidate";
 
-  return {
+  return sanitizeCandidateProfile({
     name: name,
     location: "Johannesburg, South Africa (Open to Remote)",
     targetSalary: "R45,000 - R65,000 per month",
@@ -278,7 +332,7 @@ export async function parseCVToProfile(cvText: string): Promise<CandidateProfile
       "Service Delivery Manager",
       "Technical Support Lead",
     ],
-    experienceSummary: cvText.substring(0, 300) + "...",
+    experienceSummary: sanitizedInput.substring(0, 300) + "...",
     companiesWorkedAt: ["Enterprise Tech", "Telecommunications Lead"],
     keySkills: [
       "IT Operations",
@@ -289,7 +343,7 @@ export async function parseCVToProfile(cvText: string): Promise<CandidateProfile
       "Team Leadership",
       "Process Automation",
     ],
-  };
+  });
 }
 
 export async function generateDailyReport(profile: CandidateProfile): Promise<DailyReport> {
